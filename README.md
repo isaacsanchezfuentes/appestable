@@ -1,6 +1,6 @@
 Overview
 
-This is an Android application that implements a secure authentication system using Auth0, supporting Google OAuth2 login, JWT-based session handling, and a complete authentication flow with deep link callbacks.
+This is an Android application for managing travel expenses, for family trips, that implements a secure authentication system using Auth0, supporting Google OAuth2 login, JWT-based session handling, and a complete authentication flow with deep link callbacks.
 
 The project was built as a hands-on implementation of modern identity standards (OAuth2 / OpenID Connect), simulating a real-world authentication layer used in enterprise mobile applications.
 
