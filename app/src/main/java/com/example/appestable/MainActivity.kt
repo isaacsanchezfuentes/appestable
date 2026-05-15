@@ -33,11 +33,7 @@ import androidx.compose.ui.Modifier
 
 import androidx.lifecycle.viewmodel.compose.viewModel
 
-import com.auth0.android.Auth0
-import com.auth0.android.authentication.AuthenticationException
-import com.auth0.android.callback.Callback
-import com.auth0.android.provider.WebAuthProvider
-import com.auth0.android.result.Credentials
+import com.example.appestable.auth.AuthManager
 
 import com.example.appestable.ui.PantallaActividades
 import com.example.appestable.ui.PantallaAgregarPersona
@@ -48,13 +44,12 @@ import com.example.appestable.ui.theme.AppestableTheme
 
 import kotlinx.coroutines.launch
 
-import com.auth0.android.jwt.JWT
-
 class MainActivity : ComponentActivity() {
 
-    private lateinit var account: Auth0
+    // 🔥 Auth desacoplado
+    private lateinit var authManager: AuthManager
 
-    // 🔥 Estado simple de autenticación
+    // 🔥 Estado UI
     private var isLoggedIn by mutableStateOf(false)
 
     private var userEmail by mutableStateOf("")
@@ -62,11 +57,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Auth0
-        account = Auth0(
-            "q9hPzu6loAkYwN0oNi6bakQi3T3t0iA4",
-            "dev-zbne73xs48twrr2a.us.auth0.com"
-        )
+        // 🔥 Inicializar AuthManager
+        authManager = AuthManager(this)
+
+        // 🔥 Restaurar sesión persistente
+        if (authManager.isLoggedIn()) {
+
+            authManager.restoreSession {
+
+                userEmail = it
+
+                isLoggedIn = true
+            }
+        }
 
         setContent {
 
@@ -90,7 +93,9 @@ class MainActivity : ComponentActivity() {
                     pageCount = { pages.size }
                 )
 
-                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                val scope =
+                    androidx.compose.runtime
+                        .rememberCoroutineScope()
 
                 // ViewModel
                 val vm: PersonaViewModel =
@@ -108,15 +113,20 @@ class MainActivity : ComponentActivity() {
 
                                 NavigationBarItem(
 
-                                    selected = pagerState.currentPage == i,
+                                    selected =
+                                        pagerState.currentPage == i,
 
                                     onClick = {
+
                                         scope.launch {
-                                            pagerState.animateScrollToPage(i)
+
+                                            pagerState
+                                                .animateScrollToPage(i)
                                         }
                                     },
 
                                     icon = {
+
                                         Icon(
                                             icons[i],
                                             contentDescription = label
@@ -124,6 +134,7 @@ class MainActivity : ComponentActivity() {
                                     },
 
                                     label = {
+
                                         Text(label)
                                     }
                                 )
@@ -139,13 +150,34 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                     ) {
 
-                        // 🔥 UI reactiva basada en auth
+                        // 🔥 UI REACTIVA
 
                         if (!isLoggedIn) {
 
                             Button(
-                                onClick = { login() }
+
+                                onClick = {
+
+                                    authManager.login(
+
+                                        onSuccess = {
+
+                                            userEmail = it
+
+                                            isLoggedIn = true
+                                        },
+
+                                        onError = {
+
+                                            Log.e(
+                                                "AUTH0",
+                                                it
+                                            )
+                                        }
+                                    )
+                                }
                             ) {
+
                                 Text("Login Auth0")
                             }
 
@@ -156,14 +188,26 @@ class MainActivity : ComponentActivity() {
                             Text("Usuario: $userEmail")
 
                             Button(
-                                onClick = { logout() }
+
+                                onClick = {
+
+                                    authManager.logout {
+
+                                        isLoggedIn = false
+
+                                        userEmail = ""
+                                    }
+                                }
                             ) {
+
                                 Text("Logout")
                             }
                         }
 
                         HorizontalPager(
+
                             modifier = Modifier.weight(1f),
+
                             state = pagerState
 
                         ) { page ->
@@ -181,91 +225,5 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    // 🔥 LOGIN
-
-    private fun login() {
-
-        WebAuthProvider
-            .login(account)
-            .withScheme("appestable")
-            .withConnection(connectionName = "google-oauth2")
-            .start(
-                this,
-
-                object : Callback<Credentials, AuthenticationException> {
-
-                    override fun onFailure(
-                        error: AuthenticationException
-                    ) {
-
-                        Log.e(
-                            "AUTH0",
-                            error.getDescription() ?: "Login failed"
-                        )
-                    }
-
-                    override fun onSuccess(
-                        result: Credentials
-                    ) {
-
-                        // 🔥 Actualiza estado UI
-                        isLoggedIn = true
-
-                        val jwt = JWT(result.idToken)
-
-                        userEmail = jwt.getClaim("email")
-                            .asString() ?: "Usuario autenticado"
-
-                        Log.d(
-                            "AUTH0",
-                            "ACCESS TOKEN: ${result.accessToken}"
-                        )
-
-                        Log.d(
-                            "AUTH0",
-                            "ID TOKEN: ${result.idToken}"
-                        )
-                    }
-                }
-            )
-    }
-
-    // 🔥 LOGOUT
-
-    private fun logout() {
-
-        WebAuthProvider
-            .logout(account)
-            .withScheme("appestable")
-            .start(
-                this,
-
-                object : Callback<Void?, AuthenticationException> {
-
-                    override fun onSuccess(result: Void?) {
-
-                        isLoggedIn = false
-
-                        userEmail = ""
-
-                        Log.d(
-                            "AUTH0",
-                            "Logout OK"
-                        )
-                    }
-
-                    override fun onFailure(
-                        error: AuthenticationException
-                    ) {
-
-                        Log.e(
-                            "AUTH0",
-                            error.getDescription() ?: "Logout failed"
-                        )
-                    }
-                }
-            )
     }
 }
