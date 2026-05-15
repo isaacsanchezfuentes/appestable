@@ -1,0 +1,34 @@
+package com.example.appestable.auth
+
+class AuthRepository(
+    private val sessionStorage: SessionStorage
+) {
+
+    suspend fun login(
+        email: String,
+        role: UserRole
+    ) {
+
+        SessionManager.currentRole = role
+        SessionManager.currentUserEmail = email
+        SessionManager.isLoggedIn = true
+
+        val session = UserSession(
+            userId = "local-user",
+            email = email,
+            role = role.name,
+            isLoggedIn = true
+        )
+
+        sessionStorage.saveSession(session)
+    }
+
+    suspend fun logout() {
+
+        SessionManager.isLoggedIn = false
+        SessionManager.currentUserEmail = null
+        SessionManager.currentRole = UserRole.USER
+
+        sessionStorage.clearSession()
+    }
+}

@@ -1,0 +1,22 @@
+package com.example.appestable.data.repository
+
+class TripRepository {
+
+    suspend fun getTrips() {
+
+        // TODO:
+        // Load trips from API or local storage
+    }
+
+    suspend fun createTrip() {
+
+        // TODO:
+        // Create trip
+    }
+
+    suspend fun deleteTrip() {
+
+        // TODO:
+        // Delete trip
+    }
+}

@@ -17,9 +17,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun participacionDao(): ParticipacionDao
     abstract fun gastoDao(): GastoDao
 
-
-
-
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
 

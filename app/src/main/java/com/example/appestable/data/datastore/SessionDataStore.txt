@@ -1,0 +1,26 @@
+package com.example.appestable.data.datastore
+
+class SessionDataStore {
+
+    suspend fun saveToken(
+        token: String
+    ) {
+
+        // TODO:
+        // Save token using DataStore
+    }
+
+    suspend fun getToken(): String? {
+
+        // TODO:
+        // Read token
+
+        return null
+    }
+
+    suspend fun clear() {
+
+        // TODO:
+        // Clear datastore
+    }
+}

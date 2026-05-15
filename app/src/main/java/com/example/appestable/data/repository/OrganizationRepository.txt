@@ -1,0 +1,16 @@
+package com.example.appestable.data.repository
+
+class OrganizationRepository {
+
+    suspend fun getOrganizations() {
+
+        // TODO:
+        // Load organizations
+    }
+
+    suspend fun switchOrganization() {
+
+        // TODO:
+        // Change active organization
+    }
+}

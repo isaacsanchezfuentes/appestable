@@ -1,0 +1,8 @@
+package com.example.appestable.auth
+
+data class UserSession(
+    val userId: String,
+    val email: String,
+    val role: String,
+    val isLoggedIn: Boolean
+)

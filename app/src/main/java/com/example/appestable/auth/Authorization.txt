@@ -1,0 +1,17 @@
+package com.example.appestable.auth
+
+object Authorization {
+
+    fun canAccessAdmin(role: UserRole): Boolean {
+        return role == UserRole.ADMIN
+    }
+
+    fun canCreateTrip(role: UserRole): Boolean {
+        return role == UserRole.ADMIN ||
+               role == UserRole.PREMIUM
+    }
+
+    fun canEditTrip(role: UserRole): Boolean {
+        return role == UserRole.ADMIN
+    }
+}

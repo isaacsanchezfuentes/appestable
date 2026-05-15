@@ -1,0 +1,8 @@
+package com.example.appestable.organization
+
+object OrganizationManager {
+
+    var currentOrganization: Organization? = null
+
+    var currentMembership: Membership? = null
+}

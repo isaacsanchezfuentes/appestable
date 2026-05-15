@@ -1,0 +1,25 @@
+package com.example.appestable.auth
+
+object ClaimsMapper {
+
+    fun mapClaimsToRole(
+        claims: Map<String, Any>
+    ): UserRole {
+
+        val roles =
+            claims["roles"] as? List<*>
+                ?: emptyList<String>()
+
+        return when {
+
+            "ADMIN" in roles ->
+                UserRole.ADMIN
+
+            "PREMIUM" in roles ->
+                UserRole.PREMIUM
+
+            else ->
+                UserRole.USER
+        }
+    }
+}

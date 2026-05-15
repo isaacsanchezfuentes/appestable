@@ -1,0 +1,19 @@
+package com.example.appestable.data.repository
+
+class AuthDataSource {
+
+    suspend fun login(
+        email: String,
+        password: String
+    ) {
+
+        // TODO:
+        // Auth0 API call
+    }
+
+    suspend fun logout() {
+
+        // TODO:
+        // Logout request
+    }
+}

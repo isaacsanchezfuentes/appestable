@@ -25,7 +25,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
 import androidx.compose.ui.Modifier
 
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -45,9 +48,16 @@ import com.example.appestable.ui.theme.AppestableTheme
 
 import kotlinx.coroutines.launch
 
+import com.auth0.android.jwt.JWT
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var account: Auth0
+
+    // 🔥 Estado simple de autenticación
+    private var isLoggedIn by mutableStateOf(false)
+
+    private var userEmail by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,7 +90,7 @@ class MainActivity : ComponentActivity() {
                     pageCount = { pages.size }
                 )
 
-                val scope = rememberCoroutineScope()
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
 
                 // ViewModel
                 val vm: PersonaViewModel =
@@ -129,10 +139,27 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                     ) {
 
-                        Button(
-                            onClick = { login() }
-                        ) {
-                            Text("Login Auth0")
+                        // 🔥 UI reactiva basada en auth
+
+                        if (!isLoggedIn) {
+
+                            Button(
+                                onClick = { login() }
+                            ) {
+                                Text("Login Auth0")
+                            }
+
+                        } else {
+
+                            Text("✅ Sesión iniciada")
+
+                            Text("Usuario: $userEmail")
+
+                            Button(
+                                onClick = { logout() }
+                            ) {
+                                Text("Logout")
+                            }
                         }
 
                         HorizontalPager(
@@ -156,11 +183,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // 🔥 LOGIN
+
     private fun login() {
 
         WebAuthProvider
             .login(account)
             .withScheme("appestable")
+            .withConnection(connectionName = "google-oauth2")
             .start(
                 this,
 
@@ -180,6 +210,14 @@ class MainActivity : ComponentActivity() {
                         result: Credentials
                     ) {
 
+                        // 🔥 Actualiza estado UI
+                        isLoggedIn = true
+
+                        val jwt = JWT(result.idToken)
+
+                        userEmail = jwt.getClaim("email")
+                            .asString() ?: "Usuario autenticado"
+
                         Log.d(
                             "AUTH0",
                             "ACCESS TOKEN: ${result.accessToken}"
@@ -188,6 +226,43 @@ class MainActivity : ComponentActivity() {
                         Log.d(
                             "AUTH0",
                             "ID TOKEN: ${result.idToken}"
+                        )
+                    }
+                }
+            )
+    }
+
+    // 🔥 LOGOUT
+
+    private fun logout() {
+
+        WebAuthProvider
+            .logout(account)
+            .withScheme("appestable")
+            .start(
+                this,
+
+                object : Callback<Void?, AuthenticationException> {
+
+                    override fun onSuccess(result: Void?) {
+
+                        isLoggedIn = false
+
+                        userEmail = ""
+
+                        Log.d(
+                            "AUTH0",
+                            "Logout OK"
+                        )
+                    }
+
+                    override fun onFailure(
+                        error: AuthenticationException
+                    ) {
+
+                        Log.e(
+                            "AUTH0",
+                            error.getDescription() ?: "Logout failed"
                         )
                     }
                 }

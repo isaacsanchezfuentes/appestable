@@ -1,0 +1,30 @@
+
+app/
+└── src/
+    └── main/
+        └── java/
+            └── com/example/appestable/
+                ├── auth/
+                │   ├── AuthRepository.kt
+                │   ├── SessionStorage.kt
+                │   ├── TokenManager.kt
+                │   └── ClaimsMapper.kt
+                │
+                ├── data/
+                │   ├── repository/
+                │   │   ├── TripRepository.kt
+                │   │   ├── UserRepository.kt
+                │   │   ├── OrganizationRepository.kt
+                │   │   └── AuthDataSource.kt
+                │   │
+                │   ├── remote/
+                │   │   ├── api/
+                │   │   └── dto/
+                │   │
+                │   └── datastore/
+                │       └── SessionDataStore.kt
+                │
+                ├── organization/
+                ├── navigation/
+                ├── ui/
+                └── MainActivity.kt

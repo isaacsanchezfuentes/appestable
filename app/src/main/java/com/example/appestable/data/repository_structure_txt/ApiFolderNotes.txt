@@ -1,0 +1,13 @@
+remote/api/
+------------------
+
+Aquí vivirán:
+- Retrofit services
+- Endpoints
+- Interceptors
+- Auth headers
+
+Ejemplo:
+- AuthApi.kt
+- TripsApi.kt
+- UserApi.kt

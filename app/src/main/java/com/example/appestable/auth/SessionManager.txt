@@ -1,0 +1,10 @@
+package com.example.appestable.auth
+
+object SessionManager {
+
+    var currentRole: UserRole = UserRole.USER
+
+    var isLoggedIn: Boolean = false
+
+    var currentUserEmail: String? = null
+}

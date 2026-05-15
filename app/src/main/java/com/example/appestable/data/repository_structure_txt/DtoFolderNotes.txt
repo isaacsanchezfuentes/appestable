@@ -1,0 +1,11 @@
+remote/dto/
+------------------
+
+Aquí vivirán:
+- Request DTOs
+- Response DTOs
+
+Ejemplo:
+- LoginRequest.kt
+- LoginResponse.kt
+- TripResponse.kt

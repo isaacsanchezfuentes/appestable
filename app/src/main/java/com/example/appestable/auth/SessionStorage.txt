@@ -1,0 +1,24 @@
+package com.example.appestable.auth
+
+class SessionStorage {
+
+    suspend fun saveSession(session: UserSession) {
+
+        // TODO:
+        // DataStore save implementation
+    }
+
+    suspend fun loadSession(): UserSession? {
+
+        // TODO:
+        // DataStore load implementation
+
+        return null
+    }
+
+    suspend fun clearSession() {
+
+        // TODO:
+        // Clear session
+    }
+}

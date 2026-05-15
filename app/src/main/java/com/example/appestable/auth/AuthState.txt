@@ -1,0 +1,11 @@
+package com.example.appestable.auth
+
+sealed class AuthState {
+
+    object LoggedOut : AuthState()
+
+    data class LoggedIn(
+        val email: String,
+        val role: UserRole
+    ) : AuthState()
+}

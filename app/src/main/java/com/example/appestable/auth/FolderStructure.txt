@@ -1,0 +1,11 @@
+app/
+└── src/
+    └── main/
+        └── java/
+            └── com/example/appestable/
+                ├── auth/
+                ├── organization/
+                ├── navigation/
+                ├── ui/
+                ├── data/
+                └── MainActivity.kt

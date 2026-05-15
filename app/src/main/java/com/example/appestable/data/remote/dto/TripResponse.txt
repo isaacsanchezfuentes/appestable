@@ -1,0 +1,16 @@
+package com.example.appestable.data.remote.dto
+
+data class TripResponse(
+
+    val id: String,
+
+    val title: String,
+
+    val destination: String,
+
+    val startDate: String,
+
+    val endDate: String,
+
+    val createdBy: String
+)

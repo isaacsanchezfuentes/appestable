@@ -1,0 +1,10 @@
+package com.example.appestable.data.remote.api
+
+interface UserApi {
+
+    suspend fun getUserProfile()
+
+    suspend fun updateUserProfile()
+
+    suspend fun getUserOrganizations()
+}

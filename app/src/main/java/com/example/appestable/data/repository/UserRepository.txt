@@ -1,0 +1,16 @@
+package com.example.appestable.data.repository
+
+class UserRepository {
+
+    suspend fun getUserProfile() {
+
+        // TODO:
+        // Load user profile
+    }
+
+    suspend fun updateUserProfile() {
+
+        // TODO:
+        // Update user profile
+    }
+}

@@ -1,0 +1,18 @@
+package com.example.appestable.data.remote.api
+
+interface TripsApi {
+
+    suspend fun getTrips(): List<TripResponse>
+
+    suspend fun getTripById(
+        tripId: String
+    ): TripResponse
+
+    suspend fun createTrip(
+        request: TripResponse
+    )
+
+    suspend fun deleteTrip(
+        tripId: String
+    )
+}

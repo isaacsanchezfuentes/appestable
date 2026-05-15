@@ -74,6 +74,7 @@ dependencies {
 
     // Add the Auth0 Android SDK
     implementation("com.auth0.android:auth0:2.11.0")
+    implementation("com.auth0.android:jwtdecode:2.0.2")
 
     // Testing
     testImplementation(libs.junit)

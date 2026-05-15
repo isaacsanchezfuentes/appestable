@@ -1,0 +1,21 @@
+package com.example.appestable.auth
+
+class TokenManager {
+
+    fun saveToken(token: String) {
+
+        // TODO
+    }
+
+    fun getToken(): String? {
+
+        // TODO
+
+        return null
+    }
+
+    fun clearToken() {
+
+        // TODO
+    }
+}
