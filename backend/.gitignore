@@ -1,7 +1,14 @@
-venv/
+# Android / IDE
+.idea/
+*.iml
+.gradle/
+build/
+
+# Backend Python
 __pycache__/
 *.pyc
+.venv/
+
+# Secrets / config local
 .env
-.vscode/
-.idea/
-*.log
+local.properties
