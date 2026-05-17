@@ -20,10 +20,9 @@ android {
             "androidx.test.runner.AndroidJUnitRunner"
 
         manifestPlaceholders["auth0Domain"] =
-            "dev-zbne73xs48twrr2a.us.auth0.com"
-
+            "YOURDOAIN"
         manifestPlaceholders["auth0Scheme"] =
-            "appestable"
+            "YOURAPP"
     }
 
     compileOptions {
