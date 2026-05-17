@@ -76,12 +76,8 @@ Mobile authentication flows
 Enterprise-grade login architecture
 Real-world OAuth2/OIDC integration patterns
 
-🚀 Future Improvements (Roadmap)
-Add role-based authorization (Admin / User)
-Secure API backend with JWT validation
-Implement refresh token rotation
-Add MFA (Multi-Factor Authentication)
-Improve session persistence and logout handling
+WE CAN MAKE AN APP ADAPTED FOR YOUR BUSINESS NEEDS, CONTACT ISANCHF@GMAIL.COM 
+
 
 
 📌 Notes
