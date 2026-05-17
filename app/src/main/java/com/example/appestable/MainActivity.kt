@@ -43,6 +43,8 @@ import com.example.appestable.ui.PersonaViewModelFactory
 import com.example.appestable.ui.theme.AppestableTheme
 
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 
 class MainActivity : ComponentActivity() {
 
@@ -51,22 +53,20 @@ class MainActivity : ComponentActivity() {
 
     // 🔥 Estado UI
     private var isLoggedIn by mutableStateOf(false)
-
     private var userEmail by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 🔥 Inicializar AuthManager
+        // 🔥 AuthManager
         authManager = AuthManager(this)
 
-        // 🔥 Restaurar sesión persistente
+        // 🔥 Restaurar sesión
         if (authManager.isLoggedIn()) {
 
-            authManager.restoreSession {
+            authManager.restoreSession { email ->
 
-                userEmail = it
-
+                userEmail = email
                 isLoggedIn = true
             }
         }
@@ -75,7 +75,6 @@ class MainActivity : ComponentActivity() {
 
             AppestableTheme {
 
-                // Pager
                 val pages = listOf(
                     "Personas",
                     "Actividades",
@@ -93,11 +92,8 @@ class MainActivity : ComponentActivity() {
                     pageCount = { pages.size }
                 )
 
-                val scope =
-                    androidx.compose.runtime
-                        .rememberCoroutineScope()
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-                // ViewModel
                 val vm: PersonaViewModel =
                     viewModel(
                         factory = PersonaViewModelFactory(application)
@@ -113,20 +109,16 @@ class MainActivity : ComponentActivity() {
 
                                 NavigationBarItem(
 
-                                    selected =
-                                        pagerState.currentPage == i,
+                                    selected = pagerState.currentPage == i,
 
                                     onClick = {
 
                                         scope.launch {
-
-                                            pagerState
-                                                .animateScrollToPage(i)
+                                            pagerState.animateScrollToPage(i)
                                         }
                                     },
 
                                     icon = {
-
                                         Icon(
                                             icons[i],
                                             contentDescription = label
@@ -134,7 +126,6 @@ class MainActivity : ComponentActivity() {
                                     },
 
                                     label = {
-
                                         Text(label)
                                     }
                                 )
@@ -150,7 +141,7 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                     ) {
 
-                        // 🔥 UI REACTIVA
+                        // 🔥 UI REACTIVA AUTH
 
                         if (!isLoggedIn) {
 
@@ -160,31 +151,55 @@ class MainActivity : ComponentActivity() {
 
                                     authManager.login(
 
-                                        onSuccess = {
+                                        onSuccess = { email, token ->
 
-                                            userEmail = it
+                                            userEmail = email
 
                                             isLoggedIn = true
+
+                                            Log.d("AUTH0", "TOKEN: $token")
+
+                                            kotlinx.coroutines.CoroutineScope(
+                                                kotlinx.coroutines.Dispatchers.IO
+                                            ).launch {
+
+                                                try {
+
+                                                    val response =
+                                                        com.example.appestable.network
+                                                            .RetrofitClient
+                                                            .api
+                                                            .getMe("Bearer $token")
+
+                                                    Log.d(
+                                                        "API",
+                                                        "SUCCESS: ${response.body()}"
+                                                    )
+
+                                                } catch (e: Exception) {
+
+                                                    Log.e(
+                                                        "API",
+                                                        "ERROR: ${e.message}"
+                                                    )
+                                                }
+                                            }
                                         },
 
                                         onError = {
 
-                                            Log.e(
-                                                "AUTH0",
-                                                it
-                                            )
+                                            Log.e("AUTH0", it)
                                         }
                                     )
                                 }
-                            ) {
 
+                            ) {
                                 Text("Login Auth0")
                             }
 
                         } else {
 
                             Text("✅ Sesión iniciada")
-
                             Text("Usuario: $userEmail")
 
                             Button(
@@ -194,30 +209,24 @@ class MainActivity : ComponentActivity() {
                                     authManager.logout {
 
                                         isLoggedIn = false
-
                                         userEmail = ""
                                     }
                                 }
-                            ) {
 
+                            ) {
                                 Text("Logout")
                             }
                         }
 
                         HorizontalPager(
-
                             modifier = Modifier.weight(1f),
-
                             state = pagerState
-
                         ) { page ->
 
                             when (page) {
 
                                 0 -> PantallaAgregarPersona(vm)
-
                                 1 -> PantallaActividades(vm)
-
                                 2 -> PantallaResumen(vm)
                             }
                         }

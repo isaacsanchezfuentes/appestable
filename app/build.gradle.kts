@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace = "com.example.appestable"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.appestable"
         minSdk = 27
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -69,12 +69,19 @@ dependencies {
     implementation("androidx.room:room-ktx:2.7.2")
     implementation(libs.androidx.navigation.compose.android)
     ksp("androidx.room:room-compiler:2.7.2")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     // Add the Auth0 Android SDK
-    implementation("com.auth0.android:auth0:2.11.0")
-    implementation("com.auth0.android:jwtdecode:2.0.2")
+    implementation(libs.auth0)
+    implementation(libs.jwtdecode)
+
+// backend base de datos
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+
+    //retrofit
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
 
     // Testing
     testImplementation(libs.junit)
