@@ -24,8 +24,8 @@ class AuthManager(
 ) {
 
     private val account = Auth0(
-        "q9hPzu6loAkYwN0oNi6bakQi3T3t0iA4",
-        "dev-zbne73xs48twrr2a.us.auth0.com"
+        "clientid",
+        "domain"
     )
 
     private val credentialsManager = CredentialsManager(
