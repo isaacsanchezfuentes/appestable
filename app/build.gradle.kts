@@ -16,14 +16,18 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner =
-            "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        manifestPlaceholders["auth0Domain"] =
-            "dev-zbne73xs48twrr2a.us.auth0.com"
+        manifestPlaceholders["auth0Domain"] = "dev-zbne73xs48twrr2a.us.auth0.com"
+        manifestPlaceholders["auth0Scheme"] = "appestable"
 
-        manifestPlaceholders["auth0Scheme"] =
-            "appestable"
+        // 🔥 Auth0 resources (Usar local.properties para valores reales)
+        resValue("string", "com_auth0_client_id", project.findProperty("AUTH0_CLIENT_ID")?.toString() ?: "YOUR_CLIENT_ID")
+        resValue("string", "com_auth0_domain", project.findProperty("AUTH0_DOMAIN")?.toString() ?: "YOUR_DOMAIN")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {
@@ -36,19 +40,14 @@ android {
     }
 }
 
-
 dependencies {
-
     // Core AndroidX
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
 
-
-    // Jetpack Compose BOM (Bill of Materials)
-    // Jetpack Compose BOM (Bill of Materials)
+    // Jetpack Compose BOM
     implementation(platform(libs.androidx.compose.bom))
-
 
     // Jetpack Compose UI
     implementation(libs.androidx.ui)
@@ -56,10 +55,9 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
 
-    // Compose ViewModel
+    // Compose ViewModel & Material
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
     implementation("androidx.compose.material3:material3:1.3.2")
-// Use the latest stable version
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.constraintlayout:constraintlayout:2.2.1")
@@ -71,15 +69,11 @@ dependencies {
     ksp("androidx.room:room-compiler:2.7.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
-    // Add the Auth0 Android SDK
+    // Auth0
     implementation(libs.auth0)
     implementation(libs.jwtdecode)
 
-// backend base de datos
-    implementation("com.squareup.retrofit2:retrofit:2.11.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
-
-    //retrofit
+    // Retrofit
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
 
@@ -91,6 +85,4 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-
-
 }

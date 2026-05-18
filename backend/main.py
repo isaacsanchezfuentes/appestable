@@ -11,9 +11,10 @@ from db.session import engine
 app = FastAPI()
 security = HTTPBearer()
 
-# 🔥 AUTH0 CONFIG
-AUTH0_DOMAIN = "dev-zbne73xs48twrr2a.us.auth0.com"
+# 🔥 AUTH0 CONFIG (Configurar via variables de entorno o archivo .env)
+AUTH0_DOMAIN = "YOUR_AUTH0_DOMAIN"
 ALGORITHMS = ["RS256"]
+API_AUDIENCE = "YOUR_API_AUDIENCE"
 
 # 🔥 MODELO SIMPLE (request)
 class Usuario(BaseModel):
@@ -60,6 +61,7 @@ def verify_token(
             token,
             rsa_key,
             algorithms=ALGORITHMS,
+            audience=API_AUDIENCE, # <-- Añadimos validación de audiencia
             issuer=f"https://{AUTH0_DOMAIN}/"
         )
         return payload

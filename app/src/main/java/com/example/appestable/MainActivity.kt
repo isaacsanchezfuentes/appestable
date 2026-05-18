@@ -42,6 +42,7 @@ import com.example.appestable.ui.PersonaViewModel
 import com.example.appestable.ui.PersonaViewModelFactory
 import com.example.appestable.ui.theme.AppestableTheme
 
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,16 +64,15 @@ class MainActivity : ComponentActivity() {
 
         // 🔥 Restaurar sesión
         if (authManager.isLoggedIn()) {
-
-            authManager.restoreSession { email ->
-
+            authManager.restoreSession { email, token ->
                 userEmail = email
                 isLoggedIn = true
+                // Validar contra backend al restaurar
+                validarContraBackend(token)
             }
         }
 
         setContent {
-
             AppestableTheme {
 
                 val pages = listOf(
@@ -100,31 +100,22 @@ class MainActivity : ComponentActivity() {
                     )
 
                 Scaffold(
-
                     bottomBar = {
-
                         NavigationBar {
-
                             pages.forEachIndexed { i, label ->
-
                                 NavigationBarItem(
-
                                     selected = pagerState.currentPage == i,
-
                                     onClick = {
-
                                         scope.launch {
                                             pagerState.animateScrollToPage(i)
                                         }
                                     },
-
                                     icon = {
                                         Icon(
                                             icons[i],
                                             contentDescription = label
                                         )
                                     },
-
                                     label = {
                                         Text(label)
                                     }
@@ -144,75 +135,35 @@ class MainActivity : ComponentActivity() {
                         // 🔥 UI REACTIVA AUTH
 
                         if (!isLoggedIn) {
-
                             Button(
-
                                 onClick = {
-
                                     authManager.login(
-
                                         onSuccess = { email, token ->
-
                                             userEmail = email
-
                                             isLoggedIn = true
-
                                             Log.d("AUTH0", "TOKEN: $token")
-
-                                            kotlinx.coroutines.CoroutineScope(
-                                                kotlinx.coroutines.Dispatchers.IO
-                                            ).launch {
-
-                                                try {
-
-                                                    val response =
-                                                        com.example.appestable.network
-                                                            .RetrofitClient
-                                                            .api
-                                                            .getMe("Bearer $token")
-
-                                                    Log.d(
-                                                        "API",
-                                                        "SUCCESS: ${response.body()}"
-                                                    )
-
-                                                } catch (e: Exception) {
-
-                                                    Log.e(
-                                                        "API",
-                                                        "ERROR: ${e.message}"
-                                                    )
-                                                }
-                                            }
+                                            validarContraBackend(token)
                                         },
-
                                         onError = {
-
                                             Log.e("AUTH0", it)
                                         }
                                     )
                                 }
-
                             ) {
                                 Text("Login Auth0")
                             }
 
                         } else {
-
                             Text("✅ Sesión iniciada")
                             Text("Usuario: $userEmail")
 
                             Button(
-
                                 onClick = {
-
                                     authManager.logout {
-
                                         isLoggedIn = false
                                         userEmail = ""
                                     }
                                 }
-
                             ) {
                                 Text("Logout")
                             }
@@ -222,9 +173,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.weight(1f),
                             state = pagerState
                         ) { page ->
-
                             when (page) {
-
                                 0 -> PantallaAgregarPersona(vm)
                                 1 -> PantallaActividades(vm)
                                 2 -> PantallaResumen(vm)
@@ -232,6 +181,21 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private fun validarContraBackend(token: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val response = com.example.appestable.network.RetrofitClient.api.getMe("Bearer $token")
+                if (response.isSuccessful) {
+                    Log.d("API", "SUCCESS: ${response.body()}")
+                } else {
+                    Log.e("API", "ERROR CODE: ${response.code()} - ${response.errorBody()?.string()}")
+                }
+            } catch (e: Exception) {
+                Log.e("API", "CONNECTION ERROR: ${e.message}")
             }
         }
     }

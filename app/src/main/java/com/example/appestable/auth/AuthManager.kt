@@ -19,10 +19,7 @@ class AuthManager(
     private val context: Context
 ) {
 
-    private val account = Auth0.getInstance(
-        "q9hPzu6loAkYwN0oNi6bakQi3T3t0iA4",
-        "dev-zbne73xs48twrr2a.us.auth0.com"
-    )
+    private val account = Auth0.getInstance(context)
 
     private val credentialsManager = CredentialsManager(
         AuthenticationAPIClient(account),
@@ -132,7 +129,7 @@ class AuthManager(
 
     // 🔥 RESTORE SESSION
     fun restoreSession(
-        onSessionRestored: (String) -> Unit
+        onSessionRestored: (String, String) -> Unit
     ) {
 
         if (!credentialsManager.hasValidCredentials()) return
@@ -157,19 +154,14 @@ class AuthManager(
                         .asString()
                         ?: "Usuario autenticado"
 
-                    val token = result.accessToken
+                    val token = result.accessToken ?: ""
 
                     Log.d(
                         "AUTH0",
                         "Session restored: $email"
                     )
 
-                    Log.d(
-                        "AUTH0",
-                        "TOKEN RESTORED: $token"
-                    )
-
-                    onSessionRestored(email)
+                    onSessionRestored(email, token)
                 }
 
                 override fun onFailure(error: CredentialsManagerException) {
