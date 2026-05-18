@@ -188,9 +188,31 @@ class MainActivity : ComponentActivity() {
     private fun validarContraBackend(token: String) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
+                // 1. Validar Token (Get Me)
                 val response = com.example.appestable.network.RetrofitClient.api.getMe("Bearer $token")
+                
                 if (response.isSuccessful) {
-                    Log.d("API", "SUCCESS: ${response.body()}")
+                    val me = response.body()
+                    Log.d("API", "SUCCESS LOGIN: $me")
+                    
+                    // 2. Intentar registrar/sincronizar el usuario automáticamente
+                    // Usamos valores temporales o los que vienen de Auth0
+                    val request = com.example.appestable.network.PersonaRequest(
+                        nombre = userEmail.split("@")[0], // Nombre basado en email
+                        familia_nombre = "Mi Familia",     // Familia por defecto
+                        email = userEmail,
+                        es_jefe = true
+                    )
+                    
+                    val regResponse = com.example.appestable.network.RetrofitClient.api.registrarPersona(
+                        "Bearer $token",
+                        request
+                    )
+                    
+                    if (regResponse.isSuccessful) {
+                        Log.d("API", "USER SYNCED: ${regResponse.body()}")
+                    }
+
                 } else {
                     Log.e("API", "ERROR CODE: ${response.code()} - ${response.errorBody()?.string()}")
                 }
