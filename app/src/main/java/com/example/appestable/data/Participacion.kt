@@ -7,8 +7,18 @@ import androidx.room.ForeignKey
     tableName = "participaciones",
     primaryKeys = ["personaId", "actividadId"],
     foreignKeys = [
-        ForeignKey(entity = Persona::class, parentColumns = ["id"], childColumns = ["personaId"]),
-        ForeignKey(entity = Actividad::class, parentColumns = ["id"], childColumns = ["actividadId"])
+        ForeignKey(
+            entity = Persona::class,
+            parentColumns = ["id"],
+            childColumns = ["personaId"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = Actividad::class,
+            parentColumns = ["id"],
+            childColumns = ["actividadId"],
+            onDelete = ForeignKey.CASCADE
+        )
     ]
 )
 data class Participacion(

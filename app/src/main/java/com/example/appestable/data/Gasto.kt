@@ -7,11 +7,17 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "gastos",
     foreignKeys = [
-        ForeignKey(entity = Persona::class, parentColumns = ["id"], childColumns = ["personaId"]),
+        ForeignKey(
+            entity = Persona::class,
+            parentColumns = ["id"],
+            childColumns = ["personaId"],
+            onDelete = ForeignKey.CASCADE
+        ),
         ForeignKey(
             entity = Actividad::class,
             parentColumns = ["id"],
-            childColumns = ["actividadId"]
+            childColumns = ["actividadId"],
+            onDelete = ForeignKey.CASCADE
         )
     ]
 )

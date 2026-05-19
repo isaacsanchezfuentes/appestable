@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [Organizador::class, Familia::class, Persona::class, Actividad::class, Participacion::class, Gasto::class],
-    version = 16
+    version = 17
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun organizadorDao(): OrganizadorDao

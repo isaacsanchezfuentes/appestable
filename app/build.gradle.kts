@@ -21,9 +21,9 @@ android {
         manifestPlaceholders["auth0Domain"] = "dev-zbne73xs48twrr2a.us.auth0.com"
         manifestPlaceholders["auth0Scheme"] = "appestable"
 
-        // 🔥 Auth0 resources (Usar local.properties para valores reales)
-        resValue("string", "com_auth0_client_id", project.findProperty("AUTH0_CLIENT_ID")?.toString() ?: "YOUR_CLIENT_ID")
-        resValue("string", "com_auth0_domain", project.findProperty("AUTH0_DOMAIN")?.toString() ?: "YOUR_DOMAIN")
+        // 🔥 Auth0 resources
+        resValue("string", "com_auth0_client_id", "q9hPzu6loAkYwN0oNi6bakQi3T3t0iA4")
+        resValue("string", "com_auth0_domain", "dev-zbne73xs48twrr2a.us.auth0.com")
     }
 
     buildFeatures {

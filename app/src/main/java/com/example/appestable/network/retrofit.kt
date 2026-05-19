@@ -7,7 +7,7 @@ object RetrofitClient {
 
     // Usar la IP local de tu PC (ej. 192.168.0.7) para celular físico
     private const val BASE_URL =
-        "http://YOUR_BACKEND_IP:8000/"
+        "http://192.168.0.7:8000/"
 
     val api: ApiService by lazy {
 

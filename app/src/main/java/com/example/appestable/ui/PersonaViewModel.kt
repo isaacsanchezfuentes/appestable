@@ -1,18 +1,26 @@
 package com.example.appestable.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.appestable.auth.AuthManager
 import com.example.appestable.data.*
+import com.example.appestable.network.ActividadRequest
+import com.example.appestable.network.PersonaRequest
+import com.example.appestable.network.RetrofitClient
 import com.example.appestable.ui.theme.GastoFamiliaResumen
 import com.example.appestable.ui.theme.GastoPersonaResumen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 class PersonaViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getInstance(application)
+    private val authManager = AuthManager(application)
 
     private val personaDao = db.personaDao()
     private val familiaDao = db.familiaDao()
@@ -82,6 +90,18 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
         _mensajeError.value = null
     }
 
+    private suspend fun getSessionInfo(): Pair<String?, String?> {
+        return suspendCoroutine { continuation ->
+            if (!authManager.isLoggedIn()) {
+                continuation.resume(null to null)
+                return@suspendCoroutine
+            }
+            authManager.restoreSession { email, token ->
+                continuation.resume(email to token)
+            }
+        }
+    }
+
     fun agregarPersona(
         nombre: String,
         email: String,
@@ -146,6 +166,33 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
                 )
             )
 
+            // 🔥 SINCRONIZACIÓN BACKEND
+            val (sessionEmail, token) = getSessionInfo()
+            if (token != null) {
+                try {
+                    // Prioridad: 1. Email escrito, 2. Email del Login
+                    val emailFinal = if (email.isNotBlank()) email else sessionEmail
+
+                    val response = RetrofitClient.api.registrarPersona(
+                        "Bearer $token",
+                        PersonaRequest(
+                            nombre = nombre,
+                            familia_nombre = familiaNombre,
+                            email = emailFinal,
+                            celular = celular,
+                            es_jefe = esJefe
+                        )
+                    )
+                    if (response.isSuccessful) {
+                        Log.d("API", "Persona sincronizada con el backend")
+                    } else {
+                        Log.e("API", "Error backend: ${response.errorBody()?.string()}")
+                    }
+                } catch (e: Exception) {
+                    Log.e("API", "Fallo de conexión al sincronizar persona: ${e.message}")
+                }
+            }
+
             cargarDatos()
         }
     }
@@ -190,6 +237,27 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
                         actividadId = actividadId
                     )
                 )
+            }
+
+            // 🔥 SINCRONIZACIÓN BACKEND
+            val (_, token) = getSessionInfo()
+            if (token != null) {
+                try {
+                    val response = RetrofitClient.api.registrarActividad(
+                        "Bearer $token",
+                        ActividadRequest(
+                            nombre = nombre,
+                            costo_total = costoTotal,
+                            fecha = fecha,
+                            participantes_ids = participantes.map { it.id } // Usando IDs locales temporalmente
+                        )
+                    )
+                    if (response.isSuccessful) {
+                        Log.d("API", "Actividad sincronizada con el backend")
+                    }
+                } catch (e: Exception) {
+                    Log.e("API", "Error sincronizando actividad: ${e.message}")
+                }
             }
 
             cargarActividades()

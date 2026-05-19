@@ -100,6 +100,17 @@ def root():
         "message": "Backend activo 🚀"
     }
 
+# 🔥 DEBUG ENDPOINTS (Para verificar que se llenan las tablas)
+@app.get("/debug/personas")
+def get_all_personas(db: Session = Depends(get_db)):
+    personas = db.query(models.Persona).all()
+    return personas
+
+@app.get("/debug/familias")
+def get_all_familias(db: Session = Depends(get_db)):
+    familias = db.query(models.Familia).all()
+    return familias
+
 
 # 🔥 VALIDAR USUARIO (Auth0)
 @app.get("/me")
