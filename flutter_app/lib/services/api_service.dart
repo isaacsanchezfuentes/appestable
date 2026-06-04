@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../core/api_config.dart';
 import '../models/persona.dart';
 import '../models/actividad.dart';
+import '../models/participacion.dart';
 
 class ApiService {
   final Dio _dio = Dio(BaseOptions(
@@ -61,5 +62,30 @@ class ApiService {
     } on DioException catch (e) {
       return e.response?.data?['detail']?.toString() ?? e.message;
     } catch (e) { return e.toString(); }
+  }
+
+  // --- PARTICIPACIONES ---
+  Future<List<Participacion>> getParticipaciones() async {
+    try {
+      final res = await _dio.get('/participaciones');
+      return (res.data as List).map((p) => Participacion.fromJson(p)).toList();
+    } catch (e) {
+      print("GET PARTICIPACIONES ERROR: $e");
+      return [];
+    }
+  }
+
+  Future<String?> actualizarParticipacion(int id, bool pagado, String token) async {
+    try {
+      final res = await _dio.put(
+        '/participaciones/$id',
+        data: {'pagado': pagado},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      if (res.statusCode == 200) return null;
+      return "Error al actualizar";
+    } catch (e) {
+      return e.toString();
+    }
   }
 }

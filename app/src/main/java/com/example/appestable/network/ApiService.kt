@@ -6,6 +6,9 @@ import retrofit2.http.*
 
 interface ApiService {
 
+    @GET("personas")
+    suspend fun getPersonas(): Response<List<PersonaResponse>>
+
     @GET("me")
     suspend fun getMe(
         @Header("Authorization") token: String
@@ -29,6 +32,16 @@ interface ApiService {
         @Body familia: FamiliaRequest
     ): Response<SimpleResponse>
 }
+
+data class PersonaResponse(
+    val id: Int? = null,
+    val nombre: String,
+    val email: String? = null,
+    val celular: String? = null,
+    val es_jefe: Boolean = false,
+    val familia_id: Int? = null,
+    val familia_nombre: String? = null
+)
 
 data class PersonaRequest(
     val nombre: String,

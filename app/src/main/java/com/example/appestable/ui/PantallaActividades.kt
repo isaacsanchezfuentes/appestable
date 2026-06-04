@@ -41,6 +41,23 @@ fun PantallaActividades(viewModel: PersonaViewModel) {
         }, year, month, day).show()
     }
 
+    fun montoValido(valor: String): Double? =
+        valor.replace(",", ".").toDoubleOrNull()
+
+    fun textoMontoValido(valor: String): Boolean {
+        val normalizado = valor.replace(",", ".")
+        return normalizado.count { it == '.' } <= 1 &&
+                normalizado.all { it.isDigit() || it == '.' }
+    }
+
+    val participantesSeleccionados = personas.filter { seleccionados[it.id] == true }
+    val costoActividad = montoValido(costoTotal)
+    val montoPorParticipante =
+        if (costoActividad != null && participantesSeleccionados.isNotEmpty())
+            costoActividad / participantesSeleccionados.size
+        else
+            0.0
+
     val personasPorFamilia = personas.groupBy { it.familiaId }
 
     Column(
@@ -66,9 +83,13 @@ fun PantallaActividades(viewModel: PersonaViewModel) {
 
                 OutlinedTextField(
                     value = costoTotal,
-                    onValueChange = { if (it.all { ch -> ch.isDigit() }) costoTotal = it },
+                    onValueChange = {
+                        if (it.isBlank() || textoMontoValido(it)) {
+                            costoTotal = it
+                        }
+                    },
                     label = { Text("Costo total") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = shapes.medium
@@ -147,14 +168,26 @@ fun PantallaActividades(viewModel: PersonaViewModel) {
 
         Spacer(Modifier.height(16.dp))
 
+        Text(
+            text = if (participantesSeleccionados.isEmpty())
+                "Selecciona al menos una persona."
+            else
+                "Seleccionados: ${participantesSeleccionados.size} | Monto por persona: $${"%.2f".format(montoPorParticipante)}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.secondary
+        )
+
+        Spacer(Modifier.height(8.dp))
+
         Button(
             onClick = {
-                val participantes = personas.filter { seleccionados[it.id] == true }
-                if (nombreActividad.isNotBlank() && costoTotal.isNotBlank() && participantes.isNotEmpty()) {
+                val participantes = participantesSeleccionados
+                val costo = costoActividad
+                if (nombreActividad.isNotBlank() && costo != null && participantes.isNotEmpty()) {
                     viewModel.agregarActividad(
                         nombreActividad,
                         fecha,
-                        costoTotal.toDouble(),
+                        costo,
                         participantes
                     )
                     nombreActividad = ""
@@ -164,7 +197,7 @@ fun PantallaActividades(viewModel: PersonaViewModel) {
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = nombreActividad.isNotBlank() && costoTotal.isNotBlank(),
+            enabled = nombreActividad.isNotBlank() && costoActividad != null && participantesSeleccionados.isNotEmpty(),
             shape = shapes.medium
         ) {
             Text("Guardar actividad")

@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.appestable.data.Persona
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -162,6 +163,34 @@ fun PantallaAgregarPersona(viewModel: PersonaViewModel) {
             it.isNotBlank()
         }
 
+    val gruposFamilia = remember(familiasDb, personas) {
+        val idsFamilias = familiasDb.map { it.id }.toSet()
+        val grupos = familiasDb
+            .sortedBy { it.nombreFamilia.lowercase() }
+            .map { famDb ->
+                val miembros = personas
+                    .filter { it.familiaId == famDb.id }
+                    .sortedWith(
+                        compareByDescending<Persona> { it.esJefe }
+                            .thenBy { it.nombre.lowercase() }
+                    )
+                famDb.nombreFamilia to miembros
+            }
+            .toMutableList()
+
+        val sinFamilia = personas
+            .filter { it.familiaId !in idsFamilias }
+            .sortedWith(
+                compareByDescending<Persona> { it.esJefe }
+                    .thenBy { it.nombre.lowercase() }
+            )
+
+        if (sinFamilia.isNotEmpty()) {
+            grupos.add("Sin familia" to sinFamilia)
+        }
+
+        grupos
+    }
     Column(
 
         Modifier
@@ -487,106 +516,164 @@ fun PantallaAgregarPersona(viewModel: PersonaViewModel) {
 
         // Personas registradas
 
-        Text(
-            "Personas registradas:",
-            style = MaterialTheme.typography.headlineSmall
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Familias y personas",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.weight(1f)
+            )
+
+            Text(
+                "${personas.size} personas",
+                style = MaterialTheme.typography.bodyMedium,
+                color = cs.primary
+            )
+        }
 
         Spacer(Modifier.height(8.dp))
 
-        val porFamilia =
-            personas.groupBy { it.familiaId }
+        if (gruposFamilia.isEmpty()) {
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Aun no hay personas registradas.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
 
-            familiasDb.forEach { famDb ->
+        } else {
 
-                val miembros =
-                    porFamilia[famDb.id]
-                        ?.toMutableList()
-                        ?: return@forEach
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
 
-                if (miembros.isEmpty())
-                    return@forEach
+                gruposFamilia.forEach { (nombreFamilia, miembros) ->
 
-                miembros.sortByDescending {
-                    it.esJefe
-                }
-
-                item {
-
-                    Text(
-                        "👪 Familia: ${famDb.nombreFamilia}",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-
-                items(miembros) { p ->
-
-                    Card(
-
-                        shape = shapes.small,
-
-                        modifier = Modifier.fillMaxWidth()
-
-                    ) {
-
+                    item(key = "familia-$nombreFamilia") {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                nombreFamilia,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = cs.primary,
+                                modifier = Modifier.weight(1f)
+                            )
 
-                            verticalAlignment =
-                                Alignment.CenterVertically,
+                            Text(
+                                "${miembros.size}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
 
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .fillMaxWidth()
+                    if (miembros.isEmpty()) {
+                        item(key = "vacia-$nombreFamilia") {
+                            Text(
+                                "Sin integrantes",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
+                            )
+                        }
+                    }
+
+                    items(
+                        items = miembros,
+                        key = { p -> "persona-${p.id}" }
+                    ) { p ->
+
+                        Card(
+
+                            shape = shapes.small,
+
+                            modifier = Modifier.fillMaxWidth(),
+
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
 
                         ) {
 
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null
-                            )
+                            Row(
 
-                            Spacer(Modifier.width(8.dp))
+                                verticalAlignment =
+                                    Alignment.CenterVertically,
 
-                            Column(
-                                modifier = Modifier.weight(1f)
-                            ) {
-
-                                Text(
-
-                                    text = p.nombre +
-                                            if (p.esJefe)
-                                                " (Jefe)"
-                                            else "",
-
-                                    maxLines = 1,
-
-                                    overflow =
-                                        TextOverflow.Ellipsis
-                                )
-
-                                Text(
-                                    p.celular,
-                                    style =
-                                        MaterialTheme.typography.bodySmall
-                                )
-                            }
-
-                            IconButton(
-
-                                onClick = {
-                                    viewModel.eliminarPersona(p)
-                                }
+                                modifier = Modifier
+                                    .padding(10.dp)
+                                    .fillMaxWidth()
 
                             ) {
 
                                 Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "Eliminar"
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = if (p.esJefe) cs.primary else MaterialTheme.colorScheme.onSurface
                                 )
+
+                                Spacer(Modifier.width(8.dp))
+
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+
+                                    Text(
+
+                                        text = p.nombre +
+                                                if (p.esJefe)
+                                                    " (Jefe)"
+                                                else "",
+
+                                        maxLines = 1,
+
+                                        overflow =
+                                            TextOverflow.Ellipsis
+                                    )
+
+                                    val contacto = listOf(p.celular, p.email)
+                                        .filter { it.isNotBlank() }
+                                        .joinToString("  |  ")
+
+                                    if (contacto.isNotBlank()) {
+                                        Text(
+                                            contacto,
+                                            style =
+                                                MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                IconButton(
+
+                                    onClick = {
+                                        viewModel.eliminarPersona(p)
+                                    }
+
+                                ) {
+
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Eliminar"
+                                    )
+                                }
                             }
                         }
                     }

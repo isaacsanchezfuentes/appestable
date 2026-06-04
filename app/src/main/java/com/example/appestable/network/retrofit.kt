@@ -5,9 +5,9 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
 
-    // Usar la IP local de tu PC (ej. 192.168.0.7) para celular físico
+    // Usar la IP local de tu PC (ej. 192.168.0.4) para celular físico
     private const val BASE_URL =
-        "http://192.168.0.7:8000/"
+        "http://192.168.0.4:8000/"
 
     val api: ApiService by lazy {
 

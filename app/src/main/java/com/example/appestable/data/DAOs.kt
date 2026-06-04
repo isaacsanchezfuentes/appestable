@@ -11,7 +11,8 @@ interface OrganizadorDao {
 @Dao
 interface FamiliaDao {
     @Insert suspend fun insertar(familia: Familia): Long
-    @Query("SELECT * FROM familias") suspend fun obtenerTodas(): List<Familia>
+    @Query("SELECT * FROM familias ORDER BY nombreFamilia COLLATE NOCASE ASC") suspend fun obtenerTodas(): List<Familia>
+    @Query("SELECT * FROM familias WHERE nombreFamilia = :nombre LIMIT 1") suspend fun obtenerPorNombre(nombre: String): Familia?
 }
 
 

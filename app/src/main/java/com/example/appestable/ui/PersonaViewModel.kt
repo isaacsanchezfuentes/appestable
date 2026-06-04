@@ -50,6 +50,12 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
     val actividades =
         _actividades.asStateFlow()
 
+    private val _participaciones =
+        MutableStateFlow<List<Participacion>>(emptyList())
+
+    val participaciones =
+        _participaciones.asStateFlow()
+
     // Mensaje de error UI
 
     private val _mensajeError =
@@ -62,6 +68,8 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
 
         cargarDatos()
         cargarActividades()
+        cargarParticipaciones()
+        sincronizarPersonasDesdeBackend()
     }
 
     fun cargarDatos() {
@@ -85,9 +93,64 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun cargarParticipaciones() {
+
+        viewModelScope.launch {
+
+            _participaciones.value =
+                participacionDao.obtenerTodas()
+        }
+    }
+
     fun limpiarError() {
 
         _mensajeError.value = null
+    }
+
+    fun sincronizarPersonasDesdeBackend() {
+        viewModelScope.launch {
+            try {
+                val response = RetrofitClient.api.getPersonas()
+                if (!response.isSuccessful) {
+                    Log.e("API", "No se pudieron cargar personas: ${response.code()}")
+                    return@launch
+                }
+
+                response.body().orEmpty().forEach { personaBackend ->
+                    val nombreFamilia = personaBackend.familia_nombre?.takeIf { it.isNotBlank() } ?: "Sin Familia"
+                    val familia = familiaDao.obtenerPorNombre(nombreFamilia)
+                    val familiaId = familia?.id ?: familiaDao.insertar(
+                        Familia(nombreFamilia = nombreFamilia)
+                    ).toInt()
+
+                    val emailBackend = personaBackend.email.orEmpty()
+                    val existente = if (emailBackend.isNotBlank()) {
+                        personaDao.obtenerPorEmail(emailBackend)
+                    } else {
+                        personaDao.obtenerPorNombreYFamilia(personaBackend.nombre, familiaId)
+                    }
+
+                    if (existente == null) {
+                        personaDao.insertar(
+                            Persona(
+                                nombre = personaBackend.nombre,
+                                email = emailBackend,
+                                celular = personaBackend.celular.orEmpty(),
+                                familiaId = familiaId,
+                                esJefe = personaBackend.es_jefe,
+                                backendId = personaBackend.id
+                            )
+                        )
+                    } else if (existente.backendId == null && personaBackend.id != null) {
+                        personaDao.actualizarBackendId(existente.id, personaBackend.id)
+                    }
+                }
+
+                cargarDatos()
+            } catch (e: Exception) {
+                Log.e("API", "Fallo cargando personas del backend: ${e.message}")
+            }
+        }
     }
 
     private suspend fun getSessionInfo(): Pair<String?, String?> {
@@ -155,7 +218,7 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
 
             // Insertar persona
 
-            personaDao.insertar(
+            val localPersonaId = personaDao.insertar(
 
                 Persona(
                     nombre = nombre,
@@ -164,14 +227,14 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
                     familiaId = familiaId,
                     esJefe = esJefe
                 )
-            )
+            ).toInt()
 
             // 🔥 SINCRONIZACIÓN BACKEND
-            val (sessionEmail, token) = getSessionInfo()
+            val (_, token) = getSessionInfo()
             if (token != null) {
                 try {
-                    // Prioridad: 1. Email escrito, 2. Email del Login
-                    val emailFinal = if (email.isNotBlank()) email else sessionEmail
+                    // Si el formulario no trae email, se guarda como integrante sin usuario Auth0.
+                    val emailFinal = email.takeIf { it.isNotBlank() }
 
                     val response = RetrofitClient.api.registrarPersona(
                         "Bearer $token",
@@ -184,6 +247,9 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
                         )
                     )
                     if (response.isSuccessful) {
+                        response.body()?.id?.let { backendId ->
+                            personaDao.actualizarBackendId(localPersonaId, backendId)
+                        }
                         Log.d("API", "Persona sincronizada con el backend")
                     } else {
                         Log.e("API", "Error backend: ${response.errorBody()?.string()}")
@@ -228,13 +294,16 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
 
             ).toInt()
 
+            val montoPorParticipante = costoTotal / participantes.size.coerceAtLeast(1)
+
             participantes.forEach { persona ->
 
                 participacionDao.insertar(
 
                     Participacion(
                         personaId = persona.id,
-                        actividadId = actividadId
+                        actividadId = actividadId,
+                        montoAsignado = montoPorParticipante
                     )
                 )
             }
@@ -249,7 +318,7 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
                             nombre = nombre,
                             costo_total = costoTotal,
                             fecha = fecha,
-                            participantes_ids = participantes.map { it.id } // Usando IDs locales temporalmente
+                            participantes_ids = participantes.mapNotNull { it.backendId }
                         )
                     )
                     if (response.isSuccessful) {
@@ -261,7 +330,29 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
             }
 
             cargarActividades()
+            cargarParticipaciones()
         }
+    }
+
+    fun actualizarMontoParticipacion(
+        personaId: Int,
+        actividadId: Int,
+        monto: Double
+    ) {
+        viewModelScope.launch {
+            participacionDao.actualizarMonto(personaId, actividadId, monto)
+            cargarParticipaciones()
+        }
+    }
+
+    fun montoAsignado(participacion: Participacion, actividad: Actividad): Double {
+        if (participacion.montoAsignado > 0.0) return participacion.montoAsignado
+
+        val totalParticipantes = _participaciones.value
+            .count { it.actividadId == actividad.id }
+            .coerceAtLeast(1)
+
+        return actividad.costoTotal / totalParticipantes
     }
 
     // Resumen gastos por persona
@@ -283,22 +374,11 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
 
         return personas.map { persona ->
 
-            val actividadesPersona = participaciones
-
-                .filter {
-                    it.personaId == persona.id
-                }
-
-                .mapNotNull { participacion ->
-
-                    actividades.find {
-                        it.id == participacion.actividadId
-                    }
-                }
-
-            val total =
-                actividadesPersona.sumOf {
-                    it.costoTotal
+            val total = participaciones
+                .filter { it.personaId == persona.id }
+                .sumOf { participacion ->
+                    val actividad = actividades.find { it.id == participacion.actividadId }
+                    if (actividad != null) montoAsignado(participacion, actividad) else 0.0
                 }
 
             val nombreFamilia = familias.find {
@@ -337,23 +417,13 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
                 it.familiaId == familia.id
             }
 
-            val actividadesFamilia = participaciones
-
+            val total = participaciones
                 .filter { part ->
-                    miembros.any {
-                        it.id == part.personaId
-                    }
+                    miembros.any { it.id == part.personaId }
                 }
-
-                .mapNotNull { part ->
-                    actividades.find {
-                        it.id == part.actividadId
-                    }
-                }
-
-            val total =
-                actividadesFamilia.sumOf {
-                    it.costoTotal
+                .sumOf { part ->
+                    val actividad = actividades.find { it.id == part.actividadId }
+                    if (actividad != null) montoAsignado(part, actividad) else 0.0
                 }
 
             GastoFamiliaResumen(

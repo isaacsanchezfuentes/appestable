@@ -12,5 +12,6 @@ data class Persona(
     val celular: String,
     val email: String,
     val familiaId: Int,
-    val esJefe: Boolean
+    val esJefe: Boolean,
+    val backendId: Int? = null
 )

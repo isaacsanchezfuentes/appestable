@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
                                             userEmail = email
                                             isLoggedIn = true
                                             Log.d("AUTH0", "TOKEN: $token")
-                                            validarContraBackend(token)
+                                            validarContraBackend(token, vm)
                                         },
                                         onError = {
                                             Log.e("AUTH0", it)
@@ -185,7 +185,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun validarContraBackend(token: String) {
+    private fun validarContraBackend(token: String, viewModel: PersonaViewModel? = null) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 // 1. Validar Token (Get Me)
@@ -211,6 +211,7 @@ class MainActivity : ComponentActivity() {
                     
                     if (regResponse.isSuccessful) {
                         Log.d("API", "USER SYNCED: ${regResponse.body()}")
+                        viewModel?.sincronizarPersonasDesdeBackend()
                     }
 
                 } else {

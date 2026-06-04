@@ -20,13 +20,17 @@ class Persona(Base):
     email = Column(String, unique=True, index=True)
     celular = Column(String)
     es_jefe = Column(Boolean, default=False)
-    auth0_id = Column(String, unique=True, index=True) # El 'sub' de Auth0
+    auth0_id = Column(String, unique=True, index=True, nullable=True) # El 'sub' de Auth0 (nullable para permitir creación por admin)
     
     familia_id = Column(Integer, ForeignKey("familias.id"))
+    is_deleted = Column(Boolean, default=False)
     
     # Relaciones
     familia = relationship("Familia", back_populates="personas")
-    participaciones = relationship("Participacion", back_populates="persona")
+    participaciones = relationship(
+        "Participacion",
+        back_populates="persona",
+    )
 
 class Actividad(Base):
     __tablename__ = "actividades"
@@ -38,7 +42,10 @@ class Actividad(Base):
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
     # Relación: Una actividad tiene muchas participaciones
-    participaciones = relationship("Participacion", back_populates="actividad")
+    participaciones = relationship(
+        "Participacion",
+        back_populates="actividad",
+    )
 
 class Participacion(Base):
     __tablename__ = "participaciones"
@@ -46,7 +53,6 @@ class Participacion(Base):
     id = Column(Integer, primary_key=True, index=True)
     costo_individual = Column(Float)
     pagado = Column(Boolean, default=False)
-
     persona_id = Column(Integer, ForeignKey("personas.id"))
     actividad_id = Column(Integer, ForeignKey("actividades.id"))
 

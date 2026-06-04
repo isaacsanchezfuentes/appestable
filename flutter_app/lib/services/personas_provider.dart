@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/persona.dart';
 import '../models/actividad.dart';
+import '../models/participacion.dart';
 import 'api_service.dart';
 
 class PersonasProvider extends ChangeNotifier {
@@ -8,90 +9,89 @@ class PersonasProvider extends ChangeNotifier {
   
   List<Persona> _personas = [];
   List<Actividad> _actividades = [];
+  List<Participacion> _participaciones = [];
   bool _isLoading = false;
 
   List<Persona> get personas => _personas;
   List<Actividad> get actividades => _actividades;
+  List<Participacion> get participaciones => _participaciones;
   bool get isLoading => _isLoading;
 
-  // --- REGLA DE NEGOCIO: Agrupar por familia ---
-  // Agrupar por familia para la UI y ordenar alfabéticamente
   Map<String, List<Persona>> get familias {
-    // 1. Crear el mapa
     Map<String, List<Persona>> map = {};
     for (var p in _personas) {
       map.putIfAbsent(p.familiaNombre, () => []).add(p);
     }
-    
-    // 2. Ordenar las familias alfabéticamente
     var sortedKeys = map.keys.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    
     Map<String, List<Persona>> sortedMap = {};
     for (var key in sortedKeys) {
-      // Ordenar integrantes: Jefes primero, luego por nombre
-      var integrantes = map[key]!;
-      integrantes.sort((a, b) {
-        if (a.esJefe && !b.esJefe) return -1;
-        if (!a.esJefe && b.esJefe) return 1;
-        return a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase());
-      });
-      sortedMap[key] = integrantes;
+      sortedMap[key] = map[key]!;
     }
-    
     return sortedMap;
-  }
-
-  // --- REGLA DE NEGOCIO: Resumen de Gastos por Familia ---
-  // Calcula la suma de todos los gastos donde algún miembro de la familia participó
-  Map<String, double> get resumenPorFamilia {
-    Map<String, double> resumen = {};
-    
-    // Inicializar familias con 0
-    for (var f in familias.keys) {
-      resumen[f] = 0.0;
-    }
-
-    // Por ahora, simulamos el cálculo basándonos en las actividades registradas
-    // En una fase posterior, el backend nos dará el 'costo_individual' exacto
-    for (var actividad in _actividades) {
-      // Nota: Aquí necesitaríamos las participaciones reales. 
-      // Por ahora, para el MVP, asumimos que todos participan o usamos un cálculo base.
-      // Implementaremos la lógica real una vez que el endpoint de participaciones esté listo.
-      double costoPorPersona = actividad.costoTotal; 
-      
-      // Ejemplo: Sumar a la familia del 'dueño' o repartir
-      // (Lógica simplificada para visualización inmediata)
-    }
-    return resumen;
   }
 
   Future<void> refresh() async {
     _isLoading = true;
     notifyListeners();
     
-    final results = await Future.wait([
-      _api.getPersonas(),
-      _api.getActividades(),
-    ]);
-    
-    _personas = results[0] as List<Persona>;
-    _actividades = results[1] as List<Actividad>;
+    try {
+      print("📡 Descargando datos del servidor...");
+      
+      final p = await _api.getPersonas();
+      final a = await _api.getActividades();
+      final part = await _api.getParticipaciones();
+      
+      _personas = p;
+      _actividades = a;
+      _participaciones = part;
+      
+      print("✅ DATOS CARGADOS: ${_personas.length} personas y ${_participaciones.length} deudas.");
+    } catch (e) {
+      print("❌ ERROR EN REFRESH: $e");
+    }
     
     _isLoading = false;
     notifyListeners();
   }
 
-  // --- REGLA DE NEGOCIO: Validar Jefe de Familia Único ---
-  bool yaExisteJefe(String familiaNombre) {
-    return _personas.any((p) => p.familiaNombre == familiaNombre && p.esJefe);
+  double calcularGastoPersona(int personaId) {
+    final deudas = _participaciones.where((p) => p.personaId.toInt() == personaId).toList();
+    return deudas.fold(0.0, (sum, p) => sum + p.costoIndividual);
+  }
+
+  double calcularGastoFamilia(String familiaNombre) {
+    final integrantes = _personas.where((p) => p.familiaNombre == familiaNombre).toList();
+    if (integrantes.isEmpty) return 0.0;
+
+    // Aseguramos que solo comparamos IDs que existen
+    final ids = integrantes.map((p) => p.id).whereType<int>().toList();
+    
+    double total = 0.0;
+    int encontradas = 0;
+    
+    for (var part in _participaciones) {
+      if (ids.contains(part.personaId)) {
+        total += part.costoIndividual;
+        encontradas++;
+      }
+    }
+    
+    if (total > 0) {
+      print("💰 ÉXITO: Familia $familiaNombre (IDs: $ids) tiene $encontradas deudas. Suma: \$${total.toStringAsFixed(2)}");
+    } else {
+      print("⚠️ AVISO: Familia $familiaNombre (IDs: $ids) no tiene deudas vinculadas en las ${_participaciones.length} cargadas.");
+    }
+
+    return total;
+  }
+
+  List<Actividad> actividadesDeFamilia(String familiaNombre) {
+    final ids = _personas.where((p) => p.familiaNombre == familiaNombre).map((p) => p.id).toList();
+    final actIds = _participaciones.where((p) => ids.contains(p.personaId)).map((p) => p.actividadId).toSet();
+    return _actividades.where((a) => actIds.contains(a.id)).toList();
   }
 
   Future<String?> addPersona(Persona p, String token, bool isAdmin) async {
-    // Validación local antes de ir al backend
-    if (p.esJefe && yaExisteJefe(p.familiaNombre)) {
-      return "Error: La familia '${p.familiaNombre}' ya tiene un jefe asignado.";
-    }
-
     final error = await _api.registrarPersona(p, token, isAdmin: isAdmin);
     if (error == null) await refresh();
     return error;
@@ -102,5 +102,11 @@ class PersonasProvider extends ChangeNotifier {
     final error = await _api.registrarActividad(nombre, costo, fecha, pIds, token);
     if (error == null) await refresh();
     return error;
+  }
+
+  Future<String?> updatePago(int partId, bool pagado, String token) async {
+    final err = await _api.actualizarParticipacion(partId, pagado, token);
+    if (err == null) await refresh();
+    return err;
   }
 }
