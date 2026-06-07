@@ -14,12 +14,14 @@ class Participacion {
   });
 
   factory Participacion.fromJson(Map<String, dynamic> json) {
+    int? _toInt(dynamic v) => v == null ? null : (v is num ? v.toInt() : int.tryParse(v.toString()));
+    int _toIntReq(dynamic v) => _toInt(v) ?? 0;
     return Participacion(
-      id: json['id'],
+      id: _toInt(json['id']),
       // Mapeamos los nombres del backend (con _) a los de la app
-      personaId: json['persona_id'] ?? 0,
-      actividadId: json['actividad_id'] ?? 0,
-      costoIndividual: (json['costo_individual'] as num).toDouble(),
+      personaId: _toIntReq(json['persona_id']),
+      actividadId: _toIntReq(json['actividad_id']),
+      costoIndividual: (json['costo_individual'] as num?)?.toDouble() ?? 0,
       pagado: json['pagado'] ?? false,
     );
   }

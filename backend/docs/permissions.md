@@ -1,44 +1,49 @@
-# Matriz de permisos por endpoint
+# Matriz de permisos — API v1 (implementada)
 
-Este documento resume los permisos (Admin / Usuario autenticado / Público) para cada endpoint del backend.
+Provider de auth: Auth0 JWT (RS256 + JWKS). Los roles de viaje se consultan en `membresias_viaje`, no solo en claims.
 
-- Provider de auth: Auth0 (ver `main.py`). Verificación de token por JWKS.
-- Reglas admin: claim `role == "admin"` o `roles == "admin"` o `https://appestable/role == "admin"`, o tabla `users.role == 'admin'`.
+## Roles por viaje (`RolViaje`)
 
-| Endpoint | Método | Requiere token | Admin | Usuario autenticado | Público | Notas |
-|---|---:|---:|---:|---:|---:|---|
-| `/` | GET | No | No | No | Sí | Health/status |
-| `/me` | GET | Sí | No | Sí | No | Devuelve claims del token |
-| `/persona` | POST | Sí | No | Sí | No | Registro por usuario; usa `sub` como `auth0_id` |
-| `/personas/admin` | POST | Sí | Sí | No | No | Crear persona para grupo (admin) |
-| `/personas` | GET | No | Sí | Sí | Sí | Lista personas activas (`is_deleted == False`) |
-| `/personas/{persona_id}` | GET | No | Sí | Sí | Sí | Obtener persona por id |
-| `/personas/{persona_id}` | PUT | Sí | No | Sí | No | Actualizar persona (requiere token) |
-| `/personas/{persona_id}` | DELETE | Sí | No | Sí | No | Soft-delete (`is_deleted = True`) |
-| `/familias` | GET | No | Sí | Sí | Sí | Lista familias |
-| `/familias/{familia_id}` | GET | No | Sí | Sí | Sí | Obtener familia por id |
-| `/familias` | POST | Sí | Sí | No | No | Crear familia (admin o token válido) |
-| `/familias/{familia_id}` | DELETE | Sí | Sí | No | No | Eliminar familia |
-| `/actividades` | GET | No | Sí | Sí | Sí | Lista actividades |
-| `/actividades/{actividad_id}` | GET | No | Sí | Sí | Sí | Obtener actividad por id |
-| `/actividades` | POST | Sí | Sí | No | No | Crear actividad |
-| `/actividades/{actividad_id}` | PUT | Sí | Sí | No | No | Actualizar actividad |
-| `/actividades/{actividad_id}` | DELETE | Sí | Sí | No | No | Eliminar actividad |
-| `/participaciones` | GET | No | Sí | Sí | Sí | Lista participaciones |
-| `/actividades/{actividad_id}/participaciones` | GET | No | Sí | Sí | Sí | Participaciones por actividad |
-| `/participaciones` | POST | Sí | No | Sí | No | Crear participación (requiere persona y actividad existentes) |
-| `/participaciones/{participacion_id}` | PUT | Sí | No | Sí | No | Actualizar participación |
-| `/participaciones/{participacion_id}` | DELETE | Sí | No | Sí | No | Eliminar participación |
-| `/debug/personas` | GET | No | Sí | Sí | Sí | Alias para compatibilidad → `/personas` |
-| `/debug/familias` | GET | No | Sí | Sí | Sí | Alias para compatibilidad → `/familias` |
-| `/debug/actividades` | GET | No | Sí | Sí | Sí | Alias para compatibilidad → `/actividades` |
+- `ORGANIZADOR` — control total del viaje
+- `JEFE_FAMILIA` — administra su familia dentro del viaje
+- `MIEMBRO` — solo lectura de su familia
 
-## Notas adicionales
+## Endpoints v1
 
-- `auth0_id` en `personas` es nullable: se permite crear personas sin `auth0_id` (p. ej. creadas por admin).
-- Se evita la creación de personas con emails duplicados (si `is_deleted == False`).
-- DB URL: `postgresql://postgres:postgres123@localhost:5432/appestable` (ver `db/session.py`).
-- Si necesitáis roles más granulares (p. ej. permiso por endpoint para `es_jefe`), lo podemos extender en esta matriz.
+| Endpoint | Método | Auth | Roles | Notas |
+|---|---:|---|---|---|
+| `/` | GET | No | — | Health check |
+| `/status` | GET | No | — | Dashboard HTML |
+| `/me` | GET | Sí | Cualquier miembro | Usuario + membresías |
+| `/viajes` | GET | Sí | Miembro de cada viaje listado | Viajes del usuario |
+| `/viajes` | POST | Sí | Cualquier autenticado | Crea viaje; usuario = ORGANIZADOR |
+| `/viajes/{id}` | GET | Sí | Miembro del viaje | Detalle |
+| `/viajes/{id}/resumen` | GET | Sí | Miembro | Global solo ORGANIZADOR |
+| `/viajes/{id}/familias` | GET | Sí | Miembro | Filtrado por familia según rol |
+| `/viajes/{id}/personas` | GET | Sí | Miembro | Solo familias visibles |
+| `/viajes/{id}/personas` | POST | Sí | ORGANIZADOR, JEFE_FAMILIA | Jefe solo su familia |
+| `/viajes/{id}/personas/admin` | POST | Sí | Admin global Auth0 | Sin membresía requerida |
+| `/viajes/{id}/personas/{pid}` | DELETE | Sí | ORGANIZADOR, JEFE_FAMILIA | Soft-delete |
+| `/viajes/{id}/actividades` | GET | Sí | Miembro | Filtrado por familia |
+| `/viajes/{id}/actividades` | POST | Sí | ORGANIZADOR, JEFE_FAMILIA | Jefe solo su familia |
+| `/viajes/{id}/actividades/{aid}` | DELETE | Sí | ORGANIZADOR, JEFE_FAMILIA | Jefe solo actividades de su familia |
+| `/viajes/{id}/participaciones` | GET | Sí | Miembro | Filtrado por familia |
+| `/viajes/{id}/participaciones/{pid}` | PUT | Sí | ORGANIZADOR, JEFE_FAMILIA | Editar monto/pagado |
 
----
-Generado automáticamente por el asistente (puede editarse para ampliar/ajustar permisos).
+## Legacy (compatibilidad temporal)
+
+Requieren JWT. Usan `viaje_id=1` por defecto (query param opcional).
+
+| Endpoint | Equivalente v1 |
+|---|---|
+| `GET /personas` | `GET /viajes/{id}/personas` |
+| `POST /persona` | `POST /viajes/{id}/personas` |
+| `POST /personas/admin` | `POST /viajes/{id}/personas/admin` |
+| `GET /actividades` | `GET /viajes/{id}/actividades` |
+| `POST /actividades` | `POST /viajes/{id}/actividades` |
+| `GET /participaciones` | `GET /viajes/{id}/participaciones` |
+| `PUT /participaciones/{id}` | `PUT /viajes/{id}/participaciones/{id}` |
+
+## Admin global Auth0
+
+Claim `admin` en: `role`, `roles`, o `https://appestable/role`.

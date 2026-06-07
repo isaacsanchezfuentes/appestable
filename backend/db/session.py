@@ -1,9 +1,11 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-DATABASE_URL = "postgresql://postgres:postgres123@localhost:5432/appestable"
+from config import get_settings
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+settings = get_settings()
+
+engine = create_engine(settings.database_url, pool_pre_ping=True)
 
 SessionLocal = sessionmaker(
     bind=engine,

@@ -12,11 +12,12 @@ class Actividad {
   });
 
   factory Actividad.fromJson(Map<String, dynamic> json) {
+    int? _toInt(dynamic v) => v == null ? null : (v is num ? v.toInt() : int.tryParse(v.toString()));
     return Actividad(
-      id: json['id'],
-      nombre: json['nombre'],
+      id: _toInt(json['id']),
+      nombre: json['nombre'] ?? '',
       fecha: json['fecha'] ?? '',
-      costoTotal: (json['costo_total'] as num).toDouble(),
+      costoTotal: (json['costo_total'] as num?)?.toDouble() ?? 0,
     );
   }
 

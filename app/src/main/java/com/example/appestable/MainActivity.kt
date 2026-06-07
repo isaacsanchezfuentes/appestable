@@ -2,39 +2,52 @@ package com.example.appestable
 
 import android.os.Bundle
 import android.util.Log
-
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Person
-
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-
+import kotlinx.coroutines.launch
 import com.example.appestable.auth.AuthManager
-
+import com.example.appestable.data.RolViaje
 import com.example.appestable.ui.PantallaActividades
 import com.example.appestable.ui.PantallaAgregarPersona
 import com.example.appestable.ui.PantallaResumen
@@ -42,62 +55,74 @@ import com.example.appestable.ui.PersonaViewModel
 import com.example.appestable.ui.PersonaViewModelFactory
 import com.example.appestable.ui.theme.AppestableTheme
 
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 
 class MainActivity : ComponentActivity() {
 
-    // 🔥 Auth desacoplado
     private lateinit var authManager: AuthManager
-
-    // 🔥 Estado UI
     private var isLoggedIn by mutableStateOf(false)
     private var userEmail by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // 🔥 AuthManager
         authManager = AuthManager(this)
 
-        // 🔥 Restaurar sesión
         if (authManager.isLoggedIn()) {
-            authManager.restoreSession { email, token ->
-                userEmail = email
+            authManager.restoreSession { session ->
+                userEmail = session.email
                 isLoggedIn = true
-                // Validar contra backend al restaurar
-                validarContraBackend(token)
             }
         }
 
         setContent {
             AppestableTheme {
+                val vm: PersonaViewModel = viewModel(factory = PersonaViewModelFactory(application))
+                val viajes by vm.viajes.collectAsState()
+                val viajeActivo by vm.viajeActivo.collectAsState()
+                val session by vm.session.collectAsState()
+                val sincronizando by vm.sincronizando.collectAsState()
 
-                val pages = listOf(
-                    "Personas",
-                    "Actividades",
-                    "Resumen"
-                )
+                var showCrearViaje by remember { mutableStateOf(false) }
+                var nombreNuevoViaje by remember { mutableStateOf("") }
+                var viajeMenuExpanded by remember { mutableStateOf(false) }
 
+                val pages = listOf("Personas", "Actividades", "Resumen")
                 val icons = listOf(
                     Icons.Default.Person,
                     Icons.AutoMirrored.Filled.List,
                     Icons.Default.AttachMoney
                 )
+                val pagerState = rememberPagerState(initialPage = 0, pageCount = { pages.size })
+                val scope = rememberCoroutineScope()
 
-                val pagerState = rememberPagerState(
-                    initialPage = 0,
-                    pageCount = { pages.size }
-                )
-
-                val scope = androidx.compose.runtime.rememberCoroutineScope()
-
-                val vm: PersonaViewModel =
-                    viewModel(
-                        factory = PersonaViewModelFactory(application)
+                if (showCrearViaje) {
+                    AlertDialog(
+                        onDismissRequest = { showCrearViaje = false },
+                        title = { Text("Nuevo viaje") },
+                        text = {
+                            OutlinedTextField(
+                                value = nombreNuevoViaje,
+                                onValueChange = { nombreNuevoViaje = it },
+                                label = { Text("Nombre del viaje") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    if (nombreNuevoViaje.isNotBlank()) {
+                                        vm.crearViaje(nombreNuevoViaje.trim())
+                                        nombreNuevoViaje = ""
+                                        showCrearViaje = false
+                                    }
+                                }
+                            ) { Text("Crear") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showCrearViaje = false }) { Text("Cancelar") }
+                        }
                     )
+                }
 
                 Scaffold(
                     bottomBar = {
@@ -106,66 +131,115 @@ class MainActivity : ComponentActivity() {
                                 NavigationBarItem(
                                     selected = pagerState.currentPage == i,
                                     onClick = {
-                                        scope.launch {
-                                            pagerState.animateScrollToPage(i)
-                                        }
+                                        scope.launch { pagerState.animateScrollToPage(i) }
                                     },
-                                    icon = {
-                                        Icon(
-                                            icons[i],
-                                            contentDescription = label
-                                        )
-                                    },
-                                    label = {
-                                        Text(label)
-                                    }
+                                    icon = { Icon(icons[i], contentDescription = label) },
+                                    label = { Text(label) }
                                 )
                             }
                         }
                     }
-
                 ) { padding ->
-
                     Column(
                         modifier = Modifier
                             .padding(padding)
                             .fillMaxSize()
                     ) {
-
-                        // 🔥 UI REACTIVA AUTH
-
-                        if (!isLoggedIn) {
-                            Button(
-                                onClick = {
-                                    authManager.login(
-                                        onSuccess = { email, token ->
-                                            userEmail = email
-                                            isLoggedIn = true
-                                            Log.d("AUTH0", "TOKEN: $token")
-                                            validarContraBackend(token, vm)
-                                        },
-                                        onError = {
-                                            Log.e("AUTH0", it)
-                                        }
-                                    )
-                                }
+                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Login Auth0")
-                            }
-
-                        } else {
-                            Text("✅ Sesión iniciada")
-                            Text("Usuario: $userEmail")
-
-                            Button(
-                                onClick = {
-                                    authManager.logout {
-                                        isLoggedIn = false
-                                        userEmail = ""
+                                @OptIn(ExperimentalMaterial3Api::class)
+                                ExposedDropdownMenuBox(
+                                    expanded = viajeMenuExpanded,
+                                    onExpandedChange = { viajeMenuExpanded = it },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    OutlinedTextField(
+                                        value = viajeActivo?.nombre ?: "Sin viaje",
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Viaje activo") },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(viajeMenuExpanded) },
+                                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = viajeMenuExpanded,
+                                        onDismissRequest = { viajeMenuExpanded = false }
+                                    ) {
+                                        viajes.forEach { viaje ->
+                                            DropdownMenuItem(
+                                                text = { Text(viaje.nombre) },
+                                                onClick = {
+                                                    vm.seleccionarViaje(viaje.id)
+                                                    viajeMenuExpanded = false
+                                                }
+                                            )
+                                        }
                                     }
                                 }
+
+                                if (vm.canCreateViaje()) {
+                                    IconButton(onClick = { showCrearViaje = true }) {
+                                        Icon(Icons.Default.Add, contentDescription = "Crear viaje")
+                                    }
+                                }
+                            }
+
+                            val rolLabel = when (session.rol) {
+                                RolViaje.ORGANIZADOR -> "Organizador"
+                                RolViaje.JEFE_FAMILIA -> "Jefe de familia"
+                                RolViaje.MIEMBRO -> "Miembro"
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Logout")
+                                Text(
+                                    text = "Rol: $rolLabel",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (isLoggedIn) {
+                                    TextButton(
+                                        onClick = { vm.sincronizarDesdeBackend() },
+                                        enabled = !sincronizando
+                                    ) {
+                                        Text(if (sincronizando) "Sync..." else "Sincronizar")
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(4.dp))
+
+                            if (!isLoggedIn) {
+                                Button(
+                                    onClick = {
+                                        authManager.login(
+                                            onSuccess = { authSession ->
+                                                userEmail = authSession.email
+                                                isLoggedIn = true
+                                                vm.onAuthSession(authSession)
+                                            },
+                                            onError = { Log.e("AUTH0", it) }
+                                        )
+                                    }
+                                ) { Text("Login Auth0") }
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("✅ $userEmail", modifier = Modifier.weight(1f))
+                                    Button(
+                                        onClick = {
+                                            authManager.logout {
+                                                isLoggedIn = false
+                                                userEmail = ""
+                                                vm.onLogout()
+                                            }
+                                        }
+                                    ) { Text("Logout") }
+                                }
                             }
                         }
 
@@ -185,41 +259,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun validarContraBackend(token: String, viewModel: PersonaViewModel? = null) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                // 1. Validar Token (Get Me)
-                val response = com.example.appestable.network.RetrofitClient.api.getMe("Bearer $token")
-                
-                if (response.isSuccessful) {
-                    val me = response.body()
-                    Log.d("API", "SUCCESS LOGIN: $me")
-                    
-                    // 2. Intentar registrar/sincronizar el usuario automáticamente
-                    // Usamos valores temporales o los que vienen de Auth0
-                    val request = com.example.appestable.network.PersonaRequest(
-                        nombre = userEmail.split("@")[0], // Nombre basado en email
-                        familia_nombre = "Mi Familia",     // Familia por defecto
-                        email = userEmail,
-                        es_jefe = true
-                    )
-                    
-                    val regResponse = com.example.appestable.network.RetrofitClient.api.registrarPersona(
-                        "Bearer $token",
-                        request
-                    )
-                    
-                    if (regResponse.isSuccessful) {
-                        Log.d("API", "USER SYNCED: ${regResponse.body()}")
-                        viewModel?.sincronizarPersonasDesdeBackend()
-                    }
-
-                } else {
-                    Log.e("API", "ERROR CODE: ${response.code()} - ${response.errorBody()?.string()}")
-                }
-            } catch (e: Exception) {
-                Log.e("API", "CONNECTION ERROR: ${e.message}")
-            }
-        }
-    }
 }

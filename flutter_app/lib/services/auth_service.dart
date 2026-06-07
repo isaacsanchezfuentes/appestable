@@ -11,13 +11,12 @@ class AuthService with ChangeNotifier {
       _credentials = await auth0
           .webAuthentication(scheme: "appestable")
           .login(
-            audience: "https://appestable-api",
+            audience: ApiConfig.auth0Audience,
             scopes: {'openid', 'profile', 'email'},
           );
       notifyListeners();
       return _credentials != null;
-    } catch (e) {
-      print("Error en Login Flutter: $e");
+    } catch (_) {
       return false;
     }
   }

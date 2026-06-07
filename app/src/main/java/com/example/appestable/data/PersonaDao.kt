@@ -4,12 +4,16 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Update
 
 @Dao
 interface PersonaDao {
 
     @Insert
     suspend fun insertar(persona: Persona): Long
+
+    @Query("SELECT * FROM personas WHERE viajeId = :viajeId ORDER BY familiaId ASC, esJefe DESC, nombre COLLATE NOCASE ASC")
+    suspend fun obtenerPorViaje(viajeId: Int): List<Persona>
 
     @Query("SELECT * FROM personas ORDER BY familiaId ASC, esJefe DESC, nombre COLLATE NOCASE ASC")
     suspend fun obtenerTodos(): List<Persona>
@@ -32,7 +36,11 @@ interface PersonaDao {
         AND esJefe = 1
         LIMIT 1
     """)
-    suspend fun obtenerJefePorFamilia(
-        familiaId: Int
-    ): Persona?
+    suspend fun obtenerJefePorFamilia(familiaId: Int): Persona?
+
+    @Query("SELECT * FROM personas WHERE backendId = :backendId AND viajeId = :viajeId LIMIT 1")
+    suspend fun obtenerPorBackendIdYViaje(backendId: Int, viajeId: Int): Persona?
+
+    @Update
+    suspend fun actualizar(persona: Persona)
 }

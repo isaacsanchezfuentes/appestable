@@ -1,8 +1,18 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp")
+}
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        load(FileInputStream(file))
+    }
 }
 
 android {
@@ -18,12 +28,15 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        manifestPlaceholders["auth0Domain"] = "dev-zbne73xs48twrr2a.us.auth0.com"
+        manifestPlaceholders["auth0Domain"] = localProperties.getProperty("AUTH0_DOMAIN") ?: ""
         manifestPlaceholders["auth0Scheme"] = "appestable"
 
         // 🔥 Auth0 resources
-        resValue("string", "com_auth0_client_id", "q9hPzu6loAkYwN0oNi6bakQi3T3t0iA4")
-        resValue("string", "com_auth0_domain", "dev-zbne73xs48twrr2a.us.auth0.com")
+        resValue("string", "com_auth0_client_id", localProperties.getProperty("AUTH0_CLIENT_ID") ?: "")
+        resValue("string", "com_auth0_domain", localProperties.getProperty("AUTH0_DOMAIN") ?: "")
+
+        buildConfigField("String", "AUTH0_AUDIENCE", "\"${localProperties.getProperty("AUTH0_AUDIENCE") ?: ""}\"")
+        buildConfigField("String", "API_BASE_URL", "\"${localProperties.getProperty("API_BASE_URL") ?: ""}\"")
     }
 
     buildFeatures {

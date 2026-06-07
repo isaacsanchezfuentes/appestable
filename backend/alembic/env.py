@@ -19,6 +19,7 @@ fileConfig(config.config_file_name)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from db.base import Base  # noqa: E402
+from db import models  # noqa: E402, F401
 from db.session import engine as app_engine  # noqa: E402
 
 target_metadata = Base.metadata

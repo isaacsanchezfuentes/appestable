@@ -1,13 +1,12 @@
 package com.example.appestable.network
 
+import com.example.appestable.BuildConfig
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
 
-    // Usar la IP local de tu PC (ej. 192.168.0.4) para celular físico
-    private const val BASE_URL =
-        "http://192.168.0.4:8000/"
+    private val BASE_URL = BuildConfig.API_BASE_URL
 
     val api: ApiService by lazy {
 

@@ -1,0 +1,6 @@
+{
+  "API_BASE_URL": "http://192.168.0.4:8000",
+  "AUTH0_DOMAIN": "dev-zbne73xs48twrr2a.us.auth0.com",
+  "AUTH0_CLIENT_ID": "q9hPzu6loAkYwN0oNi6bakQi3T3t0iA4",
+  "AUTH0_AUDIENCE": "https://appestable-api"
+}

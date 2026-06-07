@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -19,6 +20,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -27,27 +29,22 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.appestable.data.Actividad
-import com.example.appestable.data.Participacion
-import com.example.appestable.data.Persona
+import com.example.appestable.domain.ResumenFamiliaDetalle
 
 @Composable
 fun PantallaResumen(viewModel: PersonaViewModel) {
-    val familias by viewModel.familiaList.collectAsState()
-    val personas by viewModel.persona.collectAsState()
-    val actividades by viewModel.actividades.collectAsState()
-    val participaciones: List<Participacion> by viewModel.participaciones.collectAsState()
+    val resumenes by viewModel.resumenesFamilia.collectAsState()
+    val resumenGlobal by viewModel.resumenGlobal.collectAsState()
 
     var familiaExpandidaId by remember { mutableStateOf<Int?>(null) }
     val montosEditados = remember { mutableStateMapOf<String, String>() }
-
-    val personasPorFamilia = personas.groupBy { it.familiaId }
 
     Column(
         modifier = Modifier
@@ -55,179 +52,265 @@ fun PantallaResumen(viewModel: PersonaViewModel) {
             .verticalScroll(rememberScrollState())
             .padding(12.dp)
     ) {
-        familias.forEach { familia ->
-            val miembros = personasPorFamilia[familia.id]
-                .orEmpty()
-                .sortedWith(
-                    compareByDescending<Persona> { it.esJefe }
-                        .thenBy { it.nombre.lowercase() }
-                )
+        Text(
+            text = "Balance Consolidado",
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Toca una familia para ver el desglose detallado",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(12.dp))
 
-            val participacionesFamilia: List<Participacion> = participaciones.filter { part: Participacion ->
-                miembros.any { it.id == part.personaId }
-            }
-
-            val totalFamilia = participacionesFamilia.sumOf { part: Participacion ->
-                val actividad = actividades.find { it.id == part.actividadId }
-                if (actividad != null) viewModel.montoAsignado(part, actividad) else 0.0
-            }
-
-            val estaExpandida = familiaExpandidaId == familia.id
-
+        if (viewModel.canViewResumenGlobal() && resumenGlobal != null) {
+            val global = resumenGlobal!!
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-                    .clickable {
-                        familiaExpandidaId =
-                            if (estaExpandida) null else familia.id
-                    },
-                shape = MaterialTheme.shapes.medium,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = familia.nombreFamilia,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "${miembros.size} integrantes",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    Text("Resumen del viaje", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    MetricRow("Costo total", global.costoTotalViaje, Color(0xFF1565C0))
+                    MetricRow("Pagado", global.totalPagado, Color(0xFF2E7D32))
+                    MetricRow("Pendiente", global.totalPendiente, Color(0xFFC62828))
 
-                        Text(
-                            text = "$${"%.2f".format(totalFamilia)}",
-                            color = Color(0xFF2E7D32),
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier
-                                .background(Color(0xFFD7FFD9))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
-
-                    if (estaExpandida) {
-                        Spacer(Modifier.height(12.dp))
+                    if (global.familiasRanking.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
                         Divider()
                         Spacer(Modifier.height(8.dp))
+                        Text("Ranking por familia", style = MaterialTheme.typography.labelLarge)
+                        global.familiasRanking.forEachIndexed { index, (nombre, total) ->
+                            Text("${index + 1}. $nombre — $${"%.2f".format(total)}")
+                        }
+                    }
 
-                        if (participacionesFamilia.isEmpty()) {
+                    if (global.actividadesConFaltante.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Divider()
+                        Spacer(Modifier.height(8.dp))
+                        Text("Actividades con faltante", style = MaterialTheme.typography.labelLarge, color = Color(0xFFC62828))
+                        global.actividadesConFaltante.forEach { act ->
                             Text(
-                                text = "Sin actividades asignadas.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                "${act.nombre}: faltan $${"%.2f".format(act.faltante)} de $${"%.2f".format(act.costoTotal)}",
+                                style = MaterialTheme.typography.bodySmall
                             )
-                        } else {
-                            val desglose = participacionesFamilia
-                                .mapNotNull { part: Participacion ->
-                                    val persona = miembros.find { it.id == part.personaId }
-                                    val actividad = actividades.find { it.id == part.actividadId }
-                                    if (persona != null && actividad != null) {
-                                        Triple(persona, actividad, part)
-                                    } else {
-                                        null
-                                    }
-                                }
-                                .sortedWith(
-                                    compareBy<Triple<Persona, Actividad, Participacion>> {
-                                        it.second.fecha
-                                    }.thenBy { it.second.nombre.lowercase() }
-                                        .thenBy { it.first.nombre.lowercase() }
-                                )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
 
-                            desglose.forEach { item: Triple<Persona, Actividad, Participacion> ->
-                                val persona = item.first
-                                val actividad = item.second
-                                val part = item.third
-                                val key = "${part.personaId}-${part.actividadId}"
-                                val montoActual = viewModel.montoAsignado(part, actividad)
-                                val textoMonto = montosEditados[key] ?: "%.2f".format(montoActual)
+        resumenes.forEach { resumen ->
+            FamiliaResumenCard(
+                resumen = resumen,
+                expandida = familiaExpandidaId == resumen.familiaId,
+                onToggle = {
+                    familiaExpandidaId = if (familiaExpandidaId == resumen.familiaId) null else resumen.familiaId
+                },
+                canEdit = viewModel.canEditParticipacion(resumen.familiaId),
+                montosEditados = montosEditados,
+                onGuardarMonto = { personaId, actividadId, monto ->
+                    viewModel.actualizarMontoParticipacion(personaId, actividadId, monto)
+                    montosEditados.remove("$personaId-$actividadId")
+                },
+                onTogglePagado = { personaId, actividadId, pagado ->
+                    viewModel.actualizarPagadoParticipacion(personaId, actividadId, pagado)
+                }
+            )
+        }
 
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    shape = MaterialTheme.shapes.small,
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surface
-                                    )
+        if (resumenes.isEmpty()) {
+            Text(
+                "No hay datos para mostrar en este viaje.",
+                color = Color.Gray,
+                modifier = Modifier.padding(top = 24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetricRow(label: String, value: Double, color: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label)
+        Text(
+            "$${"%.2f".format(value)}",
+            color = color,
+            style = MaterialTheme.typography.titleSmall
+        )
+    }
+}
+
+@Composable
+private fun FamiliaResumenCard(
+    resumen: ResumenFamiliaDetalle,
+    expandida: Boolean,
+    onToggle: () -> Unit,
+    canEdit: Boolean,
+    montosEditados: MutableMap<String, String>,
+    onGuardarMonto: (Int, Int, Double) -> Unit,
+    onTogglePagado: (Int, Int, Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .clickable { onToggle() },
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = resumen.nombreFamilia,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${resumen.integrantes} integrantes · ${resumen.actividadesCount} actividades",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "$${"%.2f".format(resumen.totalAsignado)}",
+                        color = Color(0xFF2E7D32),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier
+                            .background(Color(0xFFD7FFD9))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                    Text(
+                        text = "Pend: $${"%.2f".format(resumen.pendiente)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (resumen.pendiente > 0) Color(0xFFC62828) else Color(0xFF2E7D32)
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Pagado: $${"%.2f".format(resumen.totalPagado)}", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    if (expandida) "Ocultar detalle" else "Ver detalle",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            if (expandida) {
+                Spacer(Modifier.height(12.dp))
+                Divider()
+                Spacer(Modifier.height(8.dp))
+
+                if (resumen.lineas.isEmpty()) {
+                    Text(
+                        "Sin actividades asignadas.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    resumen.lineas.forEach { linea ->
+                        val key = "${linea.personaId}-${linea.actividadId}"
+                        val textoMonto = montosEditados[key] ?: "%.2f".format(linea.monto)
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            shape = MaterialTheme.shapes.small,
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Column(modifier = Modifier.padding(10.dp)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = actividad.nombre,
-                                                    style = MaterialTheme.typography.bodyLarge,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                                Text(
-                                                    text = "${persona.nombre}${if (persona.esJefe) " (Jefe)" else ""}",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            linea.actividadNombre,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            "${linea.personaNombre}${if (linea.esJefe) " (Jefe)" else ""}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Text(
+                                        if (linea.actividadFecha.isBlank()) "" else linea.actividadFecha,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        textAlign = TextAlign.End
+                                    )
+                                }
 
-                                            Text(
-                                                text = if (actividad.fecha.isBlank()) "" else actividad.fecha,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                textAlign = TextAlign.End,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
+                                Spacer(Modifier.height(8.dp))
 
-                                        Spacer(Modifier.height(8.dp))
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            OutlinedTextField(
-                                                value = textoMonto,
-                                                onValueChange = { nuevo ->
-                                                    if (nuevo.all { it.isDigit() || it == '.' }) {
-                                                        montosEditados[key] = nuevo
-                                                    }
-                                                },
-                                                label = { Text("Monto") },
-                                                keyboardOptions = KeyboardOptions(
-                                                    keyboardType = KeyboardType.Decimal
-                                                ),
-                                                singleLine = true,
-                                                modifier = Modifier.weight(1f)
-                                            )
-
-                                            Button(
-                                                onClick = {
-                                                    val monto = textoMonto.toDoubleOrNull()
-                                                    if (monto != null) {
-                                                        viewModel.actualizarMontoParticipacion(
-                                                            part.personaId,
-                                                            part.actividadId,
-                                                            monto
-                                                        )
-                                                        montosEditados.remove(key)
-                                                    }
-                                                },
-                                                modifier = Modifier.padding(top = 8.dp)
-                                            ) {
-                                                Text("Guardar")
-                                            }
-                                        }
+                                if (canEdit) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedTextField(
+                                            value = textoMonto,
+                                            onValueChange = { nuevo ->
+                                                if (nuevo.all { it.isDigit() || it == '.' }) {
+                                                    montosEditados[key] = nuevo
+                                                }
+                                            },
+                                            label = { Text("Monto") },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Button(
+                                            onClick = {
+                                                textoMonto.toDoubleOrNull()?.let { monto ->
+                                                    onGuardarMonto(linea.personaId, linea.actividadId, monto)
+                                                }
+                                            },
+                                            modifier = Modifier.padding(top = 8.dp)
+                                        ) { Text("Guardar") }
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("Pagado", style = MaterialTheme.typography.bodySmall)
+                                        Spacer(Modifier.width(8.dp))
+                                        Switch(
+                                            checked = linea.pagado,
+                                            onCheckedChange = { onTogglePagado(linea.personaId, linea.actividadId, it) }
+                                        )
+                                    }
+                                } else {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("$${"%.2f".format(linea.monto)}", style = MaterialTheme.typography.titleSmall)
+                                        Text(
+                                            if (linea.pagado) "✅ Pagado" else "⏳ Pendiente",
+                                            color = if (linea.pagado) Color(0xFF2E7D32) else Color(0xFFC62828),
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
                                     }
                                 }
                             }
@@ -235,10 +318,6 @@ fun PantallaResumen(viewModel: PersonaViewModel) {
                     }
                 }
             }
-        }
-
-        if (familias.isEmpty()) {
-            Text("Aun no hay familias registradas.", color = Color.Gray)
         }
     }
 }

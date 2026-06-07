@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.appestable.data.Persona
+import com.example.appestable.data.RolViaje
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,8 +107,11 @@ fun PantallaAgregarPersona(viewModel: PersonaViewModel) {
     val personas by
     viewModel.persona.collectAsState()
 
-    val familiasDb by
-    viewModel.familiaList.collectAsState()
+    val familiasDb = viewModel.familiasVisibles()
+
+    val session by viewModel.session.collectAsState()
+
+    val puedeAgregarPersonas = session.rol != RolViaje.MIEMBRO
 
     val mensajeError by
     viewModel.mensajeError.collectAsState()
@@ -199,8 +203,16 @@ fun PantallaAgregarPersona(viewModel: PersonaViewModel) {
 
     ) {
 
-        // Título
+        if (!puedeAgregarPersonas) {
+            Text(
+                "Tu rol es de solo lectura. Consulta el resumen de tu familia en la pestaña Resumen.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(16.dp))
+        }
 
+        if (puedeAgregarPersonas) {
         Text(
             "Agregar Persona",
             style = MaterialTheme.typography.headlineSmall,
@@ -208,8 +220,6 @@ fun PantallaAgregarPersona(viewModel: PersonaViewModel) {
         )
 
         Spacer(Modifier.height(12.dp))
-
-        // Nombre
 
         OutlinedTextField(
 
@@ -513,6 +523,7 @@ fun PantallaAgregarPersona(viewModel: PersonaViewModel) {
         Divider()
 
         Spacer(Modifier.height(12.dp))
+        }
 
         // Personas registradas
 
@@ -661,18 +672,15 @@ fun PantallaAgregarPersona(viewModel: PersonaViewModel) {
                                     }
                                 }
 
-                                IconButton(
-
-                                    onClick = {
-                                        viewModel.eliminarPersona(p)
+                                if (viewModel.canDeletePersona(p)) {
+                                    IconButton(
+                                        onClick = { viewModel.eliminarPersona(p) }
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = "Eliminar"
+                                        )
                                     }
-
-                                ) {
-
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        contentDescription = "Eliminar"
-                                    )
                                 }
                             }
                         }

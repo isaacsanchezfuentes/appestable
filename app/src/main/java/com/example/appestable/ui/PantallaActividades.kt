@@ -23,7 +23,8 @@ import java.util.*
 fun PantallaActividades(viewModel: PersonaViewModel) {
     val personas by viewModel.persona.collectAsState()
     val actividades by viewModel.actividades.collectAsState()
-    val familias by viewModel.familiaList.collectAsState()
+    val familias = viewModel.familiasVisibles()
+    val puedeCrear = viewModel.canCreateActividad()
 
     var nombreActividad by remember { mutableStateOf("") }
     var costoTotal by remember { mutableStateOf("") }
@@ -66,7 +67,16 @@ fun PantallaActividades(viewModel: PersonaViewModel) {
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Card(modifier = Modifier.fillMaxWidth(), shape = shapes.medium) {
+        if (!puedeCrear) {
+            Text(
+                "Solo organizadores y jefes de familia pueden registrar actividades.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+
+        if (puedeCrear) Card(modifier = Modifier.fillMaxWidth(), shape = shapes.medium) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("Registrar Actividad", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
@@ -118,6 +128,7 @@ fun PantallaActividades(viewModel: PersonaViewModel) {
             }
         }
 
+        if (puedeCrear) {
         Spacer(Modifier.height(16.dp))
 
         Text("Participantes por familia:", style = MaterialTheme.typography.titleMedium)
@@ -158,7 +169,8 @@ fun PantallaActividades(viewModel: PersonaViewModel) {
                             )
                             Checkbox(
                                 checked = seleccionados[persona.id] ?: false,
-                                onCheckedChange = { seleccionados[persona.id] = it }
+                                onCheckedChange = { if (viewModel.canSelectParticipante(persona)) seleccionados[persona.id] = it },
+                                enabled = viewModel.canSelectParticipante(persona)
                             )
                         }
                     }
@@ -201,6 +213,7 @@ fun PantallaActividades(viewModel: PersonaViewModel) {
             shape = shapes.medium
         ) {
             Text("Guardar actividad")
+        }
         }
 
         Spacer(Modifier.height(16.dp))

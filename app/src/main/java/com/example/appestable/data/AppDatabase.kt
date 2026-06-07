@@ -4,18 +4,29 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 
 @Database(
-    entities = [Organizador::class, Familia::class, Persona::class, Actividad::class, Participacion::class, Gasto::class],
-    version = 19
+    entities = [
+        Viaje::class,
+        Usuario::class,
+        MembresiaViaje::class,
+        Familia::class,
+        Persona::class,
+        Actividad::class,
+        Participacion::class
+    ],
+    version = 22
 )
+@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
-    abstract fun organizadorDao(): OrganizadorDao
+    abstract fun viajeDao(): ViajeDao
+    abstract fun usuarioDao(): UsuarioDao
+    abstract fun membresiaViajeDao(): MembresiaViajeDao
     abstract fun familiaDao(): FamiliaDao
     abstract fun personaDao(): PersonaDao
     abstract fun actividadDao(): ActividadDao
     abstract fun participacionDao(): ParticipacionDao
-    abstract fun gastoDao(): GastoDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -27,7 +38,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "travelmanager_db"
                 )
-                    .fallbackToDestructiveMigration() // ⚡ Esta línea evita crashes por migración en desarrollo
+                    .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }
             }

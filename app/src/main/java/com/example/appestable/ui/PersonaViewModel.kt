@@ -6,9 +6,15 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.appestable.auth.AuthManager
 import com.example.appestable.data.*
+import com.example.appestable.domain.PermissionPolicy
+import com.example.appestable.domain.ResumenCalculator
+import com.example.appestable.domain.ResumenFamiliaDetalle
+import com.example.appestable.domain.ResumenViajeGlobal
+import com.example.appestable.domain.SessionContext
 import com.example.appestable.network.ActividadRequest
+import com.example.appestable.network.ParticipacionUpdateRequest
 import com.example.appestable.network.PersonaRequest
-import com.example.appestable.network.RetrofitClient
+import com.example.appestable.sync.ViajeSyncService
 import com.example.appestable.ui.theme.GastoFamiliaResumen
 import com.example.appestable.ui.theme.GastoPersonaResumen
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,149 +27,324 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
 
     private val db = AppDatabase.getInstance(application)
     private val authManager = AuthManager(application)
+    private val syncService = ViajeSyncService(db)
 
+    private val viajeDao = db.viajeDao()
+    private val usuarioDao = db.usuarioDao()
+    private val membresiaDao = db.membresiaViajeDao()
     private val personaDao = db.personaDao()
     private val familiaDao = db.familiaDao()
-    private val gastoDao = db.gastoDao()
     private val actividadDao = db.actividadDao()
     private val participacionDao = db.participacionDao()
 
-    // Personas y familias
+    private val _viajes = MutableStateFlow<List<Viaje>>(emptyList())
+    val viajes = _viajes.asStateFlow()
 
-    private val _persona =
-        MutableStateFlow<List<Persona>>(emptyList())
+    private val _viajeActivo = MutableStateFlow<Viaje?>(null)
+    val viajeActivo = _viajeActivo.asStateFlow()
 
-    val persona =
-        _persona.asStateFlow()
+    private val _session = MutableStateFlow(SessionContext.GUEST_ORGANIZER)
+    val session = _session.asStateFlow()
 
-    private val _familiaList =
-        MutableStateFlow<List<Familia>>(emptyList())
+    private val _persona = MutableStateFlow<List<Persona>>(emptyList())
+    val persona = _persona.asStateFlow()
 
-    val familiaList =
-        _familiaList.asStateFlow()
+    private val _familiaList = MutableStateFlow<List<Familia>>(emptyList())
+    val familiaList = _familiaList.asStateFlow()
 
-    // Actividades
+    private val _actividades = MutableStateFlow<List<Actividad>>(emptyList())
+    val actividades = _actividades.asStateFlow()
 
-    private val _actividades =
-        MutableStateFlow<List<Actividad>>(emptyList())
+    private val _participaciones = MutableStateFlow<List<Participacion>>(emptyList())
+    val participaciones = _participaciones.asStateFlow()
 
-    val actividades =
-        _actividades.asStateFlow()
+    private val _resumenesFamilia = MutableStateFlow<List<ResumenFamiliaDetalle>>(emptyList())
+    val resumenesFamilia = _resumenesFamilia.asStateFlow()
 
-    private val _participaciones =
-        MutableStateFlow<List<Participacion>>(emptyList())
+    private val _resumenGlobal = MutableStateFlow<ResumenViajeGlobal?>(null)
+    val resumenGlobal = _resumenGlobal.asStateFlow()
 
-    val participaciones =
-        _participaciones.asStateFlow()
+    private val _mensajeError = MutableStateFlow<String?>(null)
+    val mensajeError = _mensajeError.asStateFlow()
 
-    // Mensaje de error UI
-
-    private val _mensajeError =
-        MutableStateFlow<String?>(null)
-
-    val mensajeError =
-        _mensajeError.asStateFlow()
+    private val _sincronizando = MutableStateFlow(false)
+    val sincronizando = _sincronizando.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            ensureSeedData()
+            cargarViajes()
+            val activo = viajeDao.obtenerPorId(1) ?: viajeDao.obtenerTodos().firstOrNull()
+            if (activo != null) seleccionarViaje(activo.id, sincronizar = false)
+        }
+    }
 
-        cargarDatos()
-        cargarActividades()
-        cargarParticipaciones()
-        sincronizarPersonasDesdeBackend()
+    private suspend fun ensureSeedData() {
+        if (viajeDao.obtenerTodos().isEmpty()) {
+            viajeDao.insertar(
+                Viaje(
+                    id = 1,
+                    nombre = "Viaje Principal",
+                    descripcion = "Viaje por defecto",
+                    backendId = 1
+                )
+            )
+        }
+    }
+
+    fun canViewFamilia(familiaId: Int): Boolean =
+        PermissionPolicy.canViewFamilia(_session.value, familiaId)
+
+    fun canAddPersona(familiaId: Int): Boolean =
+        PermissionPolicy.canAddPersona(_session.value, familiaId)
+
+    fun canDeletePersona(persona: Persona): Boolean =
+        PermissionPolicy.canDeletePersona(_session.value, persona)
+
+    fun canCreateActividad(): Boolean =
+        PermissionPolicy.canCreateActividad(_session.value)
+
+    fun canSelectParticipante(persona: Persona): Boolean =
+        PermissionPolicy.canSelectParticipante(_session.value, persona)
+
+    fun canEditParticipacion(familiaId: Int): Boolean =
+        PermissionPolicy.canEditParticipacion(_session.value, familiaId)
+
+    fun canViewResumenGlobal(): Boolean =
+        PermissionPolicy.canViewResumenGlobal(_session.value)
+
+    fun canCreateViaje(): Boolean =
+        authManager.isLoggedIn() || PermissionPolicy.canCreateViaje(_session.value)
+
+    fun familiasVisibles(): List<Familia> {
+        val current = _session.value
+        return _familiaList.value.filter { PermissionPolicy.canViewFamilia(current, it.id) }
+    }
+
+    fun seleccionarViaje(viajeId: Int, sincronizar: Boolean = true) {
+        viewModelScope.launch {
+            val viaje = viajeDao.obtenerPorId(viajeId) ?: return@launch
+            _viajeActivo.value = viaje
+            actualizarSesionParaViaje(viaje)
+            recargarDatosViaje(viajeId)
+            if (sincronizar) sincronizarViajeActivo()
+        }
+    }
+
+    fun sincronizarDesdeBackend() {
+        viewModelScope.launch { sincronizarViajeActivo(incluirCuenta = true) }
+    }
+
+    private suspend fun sincronizarViajeActivo(incluirCuenta: Boolean = false) {
+        val token = getAccessToken() ?: return
+        val viajeId = _viajeActivo.value?.id ?: return
+        val usuarioId = _session.value.usuarioId ?: resolveUsuarioId() ?: return
+
+        _sincronizando.value = true
+        try {
+            if (incluirCuenta) {
+                syncService.sincronizarCuenta(token, usuarioId)
+                cargarViajes()
+            }
+            syncService.sincronizarViajeCompleto(viajeId, token)
+            recargarDatosViaje(viajeId)
+            _viajeActivo.value?.let { actualizarSesionParaViaje(it) }
+        } finally {
+            _sincronizando.value = false
+        }
+    }
+
+    fun crearViaje(nombre: String) {
+        viewModelScope.launch {
+            val usuarioId = _session.value.usuarioId
+            val token = getAccessToken()
+
+            var backendId: Int? = null
+            if (token != null) {
+                backendId = syncService.crearViajeEnBackend(nombre.trim(), token)
+            }
+
+            val viajeId = viajeDao.insertar(
+                Viaje(
+                    nombre = nombre.trim(),
+                    organizadorUsuarioId = usuarioId,
+                    backendId = backendId
+                )
+            ).toInt()
+
+            if (usuarioId != null) {
+                membresiaDao.insertar(
+                    MembresiaViaje(
+                        viajeId = viajeId,
+                        usuarioId = usuarioId,
+                        familiaId = null,
+                        rol = RolViaje.ORGANIZADOR
+                    )
+                )
+            }
+
+            cargarViajes()
+            seleccionarViaje(viajeId, sincronizar = token != null)
+        }
+    }
+
+    fun onAuthSession(authSession: AuthManager.AuthSession) {
+        viewModelScope.launch {
+            val auth0Id = authSession.auth0Id ?: return@launch
+            val nombre = authSession.email.substringBefore("@")
+            val usuarioId = usuarioDao.insertar(
+                Usuario(
+                    auth0Id = auth0Id,
+                    email = authSession.email,
+                    nombre = nombre
+                )
+            ).toInt()
+
+            val viajeId = _viajeActivo.value?.id ?: 1
+            val membresiaExistente = membresiaDao.obtenerPorViajeYUsuario(viajeId, usuarioId)
+            if (membresiaExistente == null) {
+                membresiaDao.insertar(
+                    MembresiaViaje(
+                        viajeId = viajeId,
+                        usuarioId = usuarioId,
+                        familiaId = null,
+                        rol = RolViaje.ORGANIZADOR
+                    )
+                )
+            }
+
+            syncService.sincronizarCuenta(authSession.accessToken, usuarioId)
+            cargarViajes()
+            _viajeActivo.value?.let { actualizarSesionParaViaje(it) }
+            sincronizarViajeActivo()
+        }
+    }
+
+    fun onLogout() {
+        _session.value = _viajeActivo.value?.let { viaje ->
+            SessionContext(
+                viajeId = viaje.id,
+                viajeNombre = viaje.nombre,
+                rol = RolViaje.ORGANIZADOR,
+                isLoggedIn = false
+            )
+        } ?: SessionContext.GUEST_ORGANIZER
+        recalcularResumenes()
+    }
+
+    private suspend fun actualizarSesionParaViaje(viaje: Viaje) {
+        if (!authManager.isLoggedIn()) {
+            _session.value = SessionContext(
+                viajeId = viaje.id,
+                viajeNombre = viaje.nombre,
+                rol = RolViaje.ORGANIZADOR,
+                isLoggedIn = false
+            )
+            return
+        }
+
+        val authSession = getAuthSession() ?: run {
+            _session.value = SessionContext(
+                viajeId = viaje.id,
+                viajeNombre = viaje.nombre,
+                rol = RolViaje.ORGANIZADOR,
+                isLoggedIn = false
+            )
+            return
+        }
+
+        val auth0Id = authSession.auth0Id
+        if (auth0Id == null) {
+            _session.value = SessionContext(
+                viajeId = viaje.id,
+                viajeNombre = viaje.nombre,
+                rol = RolViaje.ORGANIZADOR,
+                isLoggedIn = true
+            )
+            return
+        }
+
+        val usuario = usuarioDao.obtenerPorAuth0Id(auth0Id)
+        if (usuario == null) {
+            onAuthSession(authSession)
+            return
+        }
+
+        val membresia = membresiaDao.obtenerPorViajeYUsuario(viaje.id, usuario.id)
+        _session.value = SessionContext(
+            viajeId = viaje.id,
+            viajeNombre = viaje.nombre,
+            rol = membresia?.rol ?: RolViaje.MIEMBRO,
+            familiaId = membresia?.familiaId,
+            usuarioId = usuario.id,
+            isLoggedIn = true
+        )
+    }
+
+    private suspend fun resolveUsuarioId(): Int? {
+        val authSession = getAuthSession() ?: return null
+        val auth0Id = authSession.auth0Id ?: return null
+        return usuarioDao.obtenerPorAuth0Id(auth0Id)?.id
+    }
+
+    private suspend fun cargarViajes() {
+        _viajes.value = viajeDao.obtenerTodos()
+    }
+
+    private suspend fun recargarDatosViaje(viajeId: Int) {
+        _persona.value = personaDao.obtenerPorViaje(viajeId)
+        _familiaList.value = familiaDao.obtenerPorViaje(viajeId)
+        _actividades.value = actividadDao.obtenerPorViaje(viajeId)
+        _participaciones.value = participacionDao.obtenerPorViaje(viajeId)
+        recalcularResumenes()
     }
 
     fun cargarDatos() {
-
         viewModelScope.launch {
-
-            _persona.value =
-                personaDao.obtenerTodos()
-
-            _familiaList.value =
-                familiaDao.obtenerTodas()
+            _viajeActivo.value?.let { recargarDatosViaje(it.id) }
         }
     }
 
-    fun cargarActividades() {
-
-        viewModelScope.launch {
-
-            _actividades.value =
-                actividadDao.obtenerTodas()
-        }
-    }
-
-    fun cargarParticipaciones() {
-
-        viewModelScope.launch {
-
-            _participaciones.value =
-                participacionDao.obtenerTodas()
-        }
-    }
+    fun cargarActividades() = cargarDatos()
+    fun cargarParticipaciones() = cargarDatos()
 
     fun limpiarError() {
-
         _mensajeError.value = null
     }
 
-    fun sincronizarPersonasDesdeBackend() {
-        viewModelScope.launch {
-            try {
-                val response = RetrofitClient.api.getPersonas()
-                if (!response.isSuccessful) {
-                    Log.e("API", "No se pudieron cargar personas: ${response.code()}")
-                    return@launch
-                }
+    private fun recalcularResumenes() {
+        val familias = familiasVisibles()
+        val personas = _persona.value
+        val actividades = _actividades.value
+        val participaciones = _participaciones.value
 
-                response.body().orEmpty().forEach { personaBackend ->
-                    val nombreFamilia = personaBackend.familia_nombre?.takeIf { it.isNotBlank() } ?: "Sin Familia"
-                    val familia = familiaDao.obtenerPorNombre(nombreFamilia)
-                    val familiaId = familia?.id ?: familiaDao.insertar(
-                        Familia(nombreFamilia = nombreFamilia)
-                    ).toInt()
-
-                    val emailBackend = personaBackend.email.orEmpty()
-                    val existente = if (emailBackend.isNotBlank()) {
-                        personaDao.obtenerPorEmail(emailBackend)
-                    } else {
-                        personaDao.obtenerPorNombreYFamilia(personaBackend.nombre, familiaId)
-                    }
-
-                    if (existente == null) {
-                        personaDao.insertar(
-                            Persona(
-                                nombre = personaBackend.nombre,
-                                email = emailBackend,
-                                celular = personaBackend.celular.orEmpty(),
-                                familiaId = familiaId,
-                                esJefe = personaBackend.es_jefe,
-                                backendId = personaBackend.id
-                            )
-                        )
-                    } else if (existente.backendId == null && personaBackend.id != null) {
-                        personaDao.actualizarBackendId(existente.id, personaBackend.id)
-                    }
-                }
-
-                cargarDatos()
-            } catch (e: Exception) {
-                Log.e("API", "Fallo cargando personas del backend: ${e.message}")
-            }
+        _resumenesFamilia.value = familias.map { familia ->
+            ResumenCalculator.calcularFamilia(familia, personas, actividades, participaciones)
         }
+
+        _resumenGlobal.value = if (canViewResumenGlobal()) {
+            ResumenCalculator.calcularGlobal(
+                _familiaList.value,
+                personas,
+                actividades,
+                participaciones
+            )
+        } else null
     }
 
-    private suspend fun getSessionInfo(): Pair<String?, String?> {
+    private suspend fun getAuthSession(): AuthManager.AuthSession? {
         return suspendCoroutine { continuation ->
             if (!authManager.isLoggedIn()) {
-                continuation.resume(null to null)
+                continuation.resume(null)
                 return@suspendCoroutine
             }
-            authManager.restoreSession { email, token ->
-                continuation.resume(email to token)
+            authManager.restoreSession { session ->
+                continuation.resume(session)
             }
         }
     }
+
+    private suspend fun getAccessToken(): String? = getAuthSession()?.accessToken
 
     fun agregarPersona(
         nombre: String,
@@ -172,91 +353,56 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
         familiaNombre: String,
         esJefe: Boolean
     ) {
-
         viewModelScope.launch {
+            val viajeId = _viajeActivo.value?.id ?: return@launch
 
-            var familiaId =
-                familiaList.value
-                    .find {
-                        it.nombreFamilia == familiaNombre
-                    }
-                    ?.id
-
-            // Si no existe la familia, créala
-
+            var familiaId = _familiaList.value.find { it.nombreFamilia == familiaNombre }?.id
             if (familiaId == null) {
-
                 familiaId = familiaDao.insertar(
-
-                    Familia(
-                        nombreFamilia = familiaNombre
-                    )
-
+                    Familia(nombreFamilia = familiaNombre, viajeId = viajeId)
                 ).toInt()
-
-                cargarDatos()
             }
 
-            // VALIDACIÓN:
-            // Solo puede existir un jefe por familia
+            if (!canAddPersona(familiaId)) {
+                _mensajeError.value = "No tienes permiso para agregar personas en esta familia"
+                return@launch
+            }
 
             if (esJefe) {
-
-                val jefeExistente =
-                    personaDao.obtenerJefePorFamilia(
-                        familiaId
-                    )
-
+                val jefeExistente = personaDao.obtenerJefePorFamilia(familiaId)
                 if (jefeExistente != null) {
-
-                    _mensajeError.value =
-                        "Solo puede existir un jefe por familia"
-
+                    _mensajeError.value = "Solo puede existir un jefe por familia"
                     return@launch
                 }
             }
 
-            // Insertar persona
-
+            val rol = if (esJefe) RolViaje.JEFE_FAMILIA else RolViaje.MIEMBRO
             val localPersonaId = personaDao.insertar(
-
                 Persona(
                     nombre = nombre,
                     email = email,
                     celular = celular,
                     familiaId = familiaId,
-                    esJefe = esJefe
+                    esJefe = esJefe,
+                    viajeId = viajeId,
+                    rol = rol
                 )
             ).toInt()
 
-            // 🔥 SINCRONIZACIÓN BACKEND
-            val (_, token) = getSessionInfo()
+            val token = getAccessToken()
             if (token != null) {
-                try {
-                    // Si el formulario no trae email, se guarda como integrante sin usuario Auth0.
-                    val emailFinal = email.takeIf { it.isNotBlank() }
-
-                    val response = RetrofitClient.api.registrarPersona(
-                        "Bearer $token",
-                        PersonaRequest(
-                            nombre = nombre,
-                            familia_nombre = familiaNombre,
-                            email = emailFinal,
-                            celular = celular,
-                            es_jefe = esJefe
-                        )
+                val backendId = syncService.pushPersona(
+                    viajeId,
+                    token,
+                    PersonaRequest(
+                        nombre = nombre,
+                        familia_nombre = familiaNombre,
+                        email = email.takeIf { it.isNotBlank() },
+                        celular = celular,
+                        es_jefe = esJefe
                     )
-                    if (response.isSuccessful) {
-                        response.body()?.id?.let { backendId ->
-                            personaDao.actualizarBackendId(localPersonaId, backendId)
-                        }
-                        Log.d("API", "Persona sincronizada con el backend")
-                    } else {
-                        Log.e("API", "Error backend: ${response.errorBody()?.string()}")
-                    }
-                } catch (e: Exception) {
-                    Log.e("API", "Fallo de conexión al sincronizar persona: ${e.message}")
-                }
+                )
+                backendId?.let { personaDao.actualizarBackendId(localPersonaId, it) }
             }
 
             cargarDatos()
@@ -264,16 +410,22 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun eliminarPersona(persona: Persona) {
-
         viewModelScope.launch {
+            if (!canDeletePersona(persona)) {
+                _mensajeError.value = "No tienes permiso para eliminar esta persona"
+                return@launch
+            }
+
+            val viajeId = _viajeActivo.value?.id ?: return@launch
+            val token = getAccessToken()
+            if (token != null && persona.backendId != null) {
+                syncService.pushDeletePersona(viajeId, persona.backendId, token)
+            }
 
             personaDao.eliminar(persona)
-
             cargarDatos()
         }
     }
-
-    // Agregar actividad y participaciones
 
     fun agregarActividad(
         nombre: String,
@@ -281,25 +433,34 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
         costoTotal: Double,
         participantes: List<Persona>
     ) {
-
         viewModelScope.launch {
+            if (!canCreateActividad()) {
+                _mensajeError.value = "No tienes permiso para crear actividades"
+                return@launch
+            }
+
+            val viajeId = _viajeActivo.value?.id ?: return@launch
+            val usuarioId = _session.value.usuarioId
+            val token = getAccessToken()
+
+            val participantesConBackend = participantes.filter { it.backendId != null }
+            if (token != null && participantesConBackend.size != participantes.size) {
+                sincronizarViajeActivo()
+            }
 
             val actividadId = actividadDao.insertar(
-
                 Actividad(
                     nombre = nombre,
                     fecha = fecha,
-                    costoTotal = costoTotal
+                    costoTotal = costoTotal,
+                    viajeId = viajeId,
+                    creadoPorUsuarioId = usuarioId
                 )
-
             ).toInt()
 
             val montoPorParticipante = costoTotal / participantes.size.coerceAtLeast(1)
-
             participantes.forEach { persona ->
-
                 participacionDao.insertar(
-
                     Participacion(
                         personaId = persona.id,
                         actividadId = actividadId,
@@ -308,129 +469,118 @@ class PersonaViewModel(application: Application) : AndroidViewModel(application)
                 )
             }
 
-            // 🔥 SINCRONIZACIÓN BACKEND
-            val (_, token) = getSessionInfo()
             if (token != null) {
-                try {
-                    val response = RetrofitClient.api.registrarActividad(
-                        "Bearer $token",
+                val refreshed = personaDao.obtenerPorViaje(viajeId)
+                val idsBackend = participantes.mapNotNull { p ->
+                    refreshed.find { it.id == p.id }?.backendId
+                }
+                if (idsBackend.isNotEmpty()) {
+                    val backendActividadId = syncService.pushActividad(
+                        viajeId,
+                        token,
                         ActividadRequest(
                             nombre = nombre,
                             costo_total = costoTotal,
                             fecha = fecha,
-                            participantes_ids = participantes.mapNotNull { it.backendId }
+                            participantes_ids = idsBackend
                         )
                     )
-                    if (response.isSuccessful) {
-                        Log.d("API", "Actividad sincronizada con el backend")
-                    }
-                } catch (e: Exception) {
-                    Log.e("API", "Error sincronizando actividad: ${e.message}")
+                    backendActividadId?.let { actividadDao.actualizarBackendId(actividadId, it) }
+                    syncService.sincronizarViajeCompleto(viajeId, token)
                 }
             }
 
-            cargarActividades()
-            cargarParticipaciones()
+            cargarDatos()
         }
     }
 
-    fun actualizarMontoParticipacion(
+    fun actualizarMontoParticipacion(personaId: Int, actividadId: Int, monto: Double) {
+        viewModelScope.launch {
+            val persona = _persona.value.find { it.id == personaId } ?: return@launch
+            if (!canEditParticipacion(persona.familiaId)) {
+                _mensajeError.value = "No tienes permiso para editar este monto"
+                return@launch
+            }
+
+            participacionDao.actualizarMonto(personaId, actividadId, monto)
+            pushParticipacionSiPosible(personaId, actividadId, monto = monto)
+            cargarDatos()
+        }
+    }
+
+    fun actualizarPagadoParticipacion(personaId: Int, actividadId: Int, pagado: Boolean) {
+        viewModelScope.launch {
+            val persona = _persona.value.find { it.id == personaId } ?: return@launch
+            if (!canEditParticipacion(persona.familiaId)) {
+                _mensajeError.value = "No tienes permiso para cambiar el estado de pago"
+                return@launch
+            }
+
+            participacionDao.actualizarPagado(personaId, actividadId, pagado)
+            pushParticipacionSiPosible(personaId, actividadId, pagado = pagado)
+            cargarDatos()
+        }
+    }
+
+    private suspend fun pushParticipacionSiPosible(
         personaId: Int,
         actividadId: Int,
-        monto: Double
+        monto: Double? = null,
+        pagado: Boolean? = null
     ) {
-        viewModelScope.launch {
-            participacionDao.actualizarMonto(personaId, actividadId, monto)
-            cargarParticipaciones()
+        val viajeId = _viajeActivo.value?.id ?: return
+        val token = getAccessToken() ?: return
+
+        var participacion = participacionDao.obtenerPorPersonaYActividad(personaId, actividadId)
+        if (participacion?.backendId == null) {
+            syncService.sincronizarViajeCompleto(viajeId, token)
+            participacion = participacionDao.obtenerPorPersonaYActividad(personaId, actividadId)
         }
+
+        val backendId = participacion?.backendId ?: return
+        syncService.pushParticipacion(
+            viajeId,
+            backendId,
+            token,
+            ParticipacionUpdateRequest(
+                costo_individual = monto,
+                pagado = pagado
+            )
+        )
     }
 
-    fun montoAsignado(participacion: Participacion, actividad: Actividad): Double {
-        if (participacion.montoAsignado > 0.0) return participacion.montoAsignado
+    fun montoAsignado(participacion: Participacion, actividad: Actividad): Double =
+        ResumenCalculator.montoEfectivo(participacion, actividad, _participaciones.value)
 
-        val totalParticipantes = _participaciones.value
-            .count { it.actividadId == actividad.id }
-            .coerceAtLeast(1)
-
-        return actividad.costoTotal / totalParticipantes
-    }
-
-    // Resumen gastos por persona
-
-    suspend fun calcularResumenGastosPorPersona():
-            List<GastoPersonaResumen> {
-
-        val personas =
-            personaDao.obtenerTodos()
-
-        val familias =
-            familiaDao.obtenerTodas()
-
-        val actividades =
-            actividadDao.obtenerTodas()
-
-        val participaciones =
-            participacionDao.obtenerTodas()
+    suspend fun calcularResumenGastosPorPersona(): List<GastoPersonaResumen> {
+        val personas = _persona.value
+        val familias = _familiaList.value
+        val actividades = _actividades.value
+        val participaciones = _participaciones.value
 
         return personas.map { persona ->
-
             val total = participaciones
                 .filter { it.personaId == persona.id }
-                .sumOf { participacion ->
-                    val actividad = actividades.find { it.id == participacion.actividadId }
-                    if (actividad != null) montoAsignado(participacion, actividad) else 0.0
+                .sumOf { part ->
+                    val actividad = actividades.find { it.id == part.actividadId }
+                    if (actividad != null) montoAsignado(part, actividad) else 0.0
                 }
-
-            val nombreFamilia = familias.find {
-                it.id == persona.familiaId
-            }?.nombreFamilia ?: ""
 
             GastoPersonaResumen(
                 nombre = persona.nombre,
-                familia = nombreFamilia,
+                familia = familias.find { it.id == persona.familiaId }?.nombreFamilia ?: "",
                 esJefe = persona.esJefe,
                 total = total
             )
         }
     }
 
-    // Resumen gastos por familia
-
-    suspend fun calcularResumenGastosPorFamilia():
-            List<GastoFamiliaResumen> {
-
-        val familias =
-            familiaDao.obtenerTodas()
-
-        val personas =
-            personaDao.obtenerTodos()
-
-        val actividades =
-            actividadDao.obtenerTodas()
-
-        val participaciones =
-            participacionDao.obtenerTodas()
-
-        return familias.map { familia ->
-
-            val miembros = personas.filter {
-                it.familiaId == familia.id
-            }
-
-            val total = participaciones
-                .filter { part ->
-                    miembros.any { it.id == part.personaId }
-                }
-                .sumOf { part ->
-                    val actividad = actividades.find { it.id == part.actividadId }
-                    if (actividad != null) montoAsignado(part, actividad) else 0.0
-                }
-
+    suspend fun calcularResumenGastosPorFamilia(): List<GastoFamiliaResumen> =
+        _resumenesFamilia.value.map {
             GastoFamiliaResumen(
-                familiaId = familia.id,
-                nombreFamilia = familia.nombreFamilia,
-                total = total
+                familiaId = it.familiaId,
+                nombreFamilia = it.nombreFamilia,
+                total = it.totalAsignado
             )
         }
-    }
 }

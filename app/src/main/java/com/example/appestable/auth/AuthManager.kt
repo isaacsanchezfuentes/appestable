@@ -14,6 +14,7 @@ import com.auth0.android.jwt.JWT
 import com.auth0.android.provider.WebAuthProvider
 import com.auth0.android.result.Credentials
 import com.auth0.android.authentication.AuthenticationException
+import com.example.appestable.BuildConfig
 
 class AuthManager(
     private val context: Context
@@ -26,9 +27,15 @@ class AuthManager(
         SharedPreferencesStorage(context)
     )
 
+    data class AuthSession(
+        val email: String,
+        val accessToken: String,
+        val auth0Id: String?
+    )
+
     // 🔥 LOGIN
     fun login(
-        onSuccess: (String, String) -> Unit,
+        onSuccess: (AuthSession) -> Unit,
         onError: (String) -> Unit
     ) {
 
@@ -37,7 +44,7 @@ class AuthManager(
             .withScheme("appestable")
             .withConnection("google-oauth2")
             .withScope("openid profile email")
-            .withAudience("https://appestable-api")
+            .withAudience(BuildConfig.AUTH0_AUDIENCE)
 
             .start(
 
@@ -52,29 +59,24 @@ class AuthManager(
 
                         val idToken = result.idToken
 
+                        val email: String
+                        val auth0Id: String?
+
                         if (idToken == null) {
-
-                            onSuccess(
-                                "Usuario autenticado",
-                                result.accessToken ?: ""
-                            )
-
-                            return
+                            email = "Usuario autenticado"
+                            auth0Id = null
+                        } else {
+                            val jwt = JWT(idToken)
+                            email = jwt.getClaim("email").asString() ?: "Usuario autenticado"
+                            auth0Id = jwt.subject
                         }
-
-                        val jwt = JWT(idToken)
-
-                        val email = jwt
-                            .getClaim("email")
-                            .asString()
-                            ?: "Usuario autenticado"
 
                         val token = result.accessToken ?: ""
 
                         Log.d("AUTH0", "Login OK: $email")
                         Log.d("AUTH0", "TOKEN: $token")
 
-                        onSuccess(email, token)
+                        onSuccess(AuthSession(email, token, auth0Id))
                     }
 
                     override fun onFailure(error: AuthenticationException) {
@@ -129,7 +131,7 @@ class AuthManager(
 
     // 🔥 RESTORE SESSION
     fun restoreSession(
-        onSessionRestored: (String, String) -> Unit
+        onSessionRestored: (AuthSession) -> Unit
     ) {
 
         if (!credentialsManager.hasValidCredentials()) return
@@ -155,13 +157,14 @@ class AuthManager(
                         ?: "Usuario autenticado"
 
                     val token = result.accessToken ?: ""
+                    val auth0Id = jwt.subject
 
                     Log.d(
                         "AUTH0",
                         "Session restored: $email"
                     )
 
-                    onSessionRestored(email, token)
+                    onSessionRestored(AuthSession(email, token, auth0Id))
                 }
 
                 override fun onFailure(error: CredentialsManagerException) {
