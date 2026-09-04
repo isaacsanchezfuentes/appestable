@@ -78,7 +78,7 @@ Mobile authentication flows
 Enterprise-grade login architecture
 Real-world OAuth2/OIDC integration patterns
 
-WE CAN MAKE AN APP ADAPTED FOR YOUR BUSINESS NEEDS, CONTACT ISANCHF@GMAIL.COM 
+Looking for custom mobile development or enterprise architecture consulting? Reach out via isanchf@gmail.com
 
 
 
