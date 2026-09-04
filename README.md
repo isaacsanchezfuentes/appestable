@@ -1,3 +1,5 @@
+Enterprise-grade Android starter kit implementing modern IAM standards (OAuth2/OIDC) via Auth0 Universal Login, Kotlin Jetpack Compose, and JWT-backed FastAPI sessions
+
 Overview
 
 Android SaaS foundation with:
